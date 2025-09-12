@@ -1,18 +1,15 @@
 CC?=g++
 CFLAGS?=-Wall -Wextra -Wpedantic -O3
 CFLAGS+=-Ilib/cglm/include
-LD=$(CC)
 LDFLAGS?=-O3 -flto
 LDFLAGS+=-lm -lSDL3
 
-OBJS=main.o
+SRCS=src/main.c
 
-rt: $(OBJS)
-	$(LD) $(LDFLAGS) -o $@ $^
+rt: $(SRCS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
-.PHONY: clean fclean
+.PHONY: clean
+
 clean:
-	-rm -f $(OBJS)
-
-fclean: clean
 	-rm rt

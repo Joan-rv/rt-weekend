@@ -396,12 +396,10 @@ static ray camera_get_ray(camera cam, int i, int j) {
     random_square_offset(offset);
     glm_vec3_copy(cam.center, ret.orig);
     if (cam.defocus_angle > 0.0) {
-        vec3 tmp, tmp2;
+        vec3 tmp;
         random_in_unit_disc_vec3(tmp);
-        glm_vec3_scale(cam.defocus_disk_u, tmp[0], tmp2);
-        glm_vec3_add(ret.orig, tmp2, ret.orig);
-        glm_vec3_scale(cam.defocus_disk_v, tmp[1], tmp2);
-        glm_vec3_add(ret.orig, tmp2, ret.orig);
+        glm_vec3_muladds(cam.defocus_disk_u, tmp[0], ret.orig);
+        glm_vec3_muladds(cam.defocus_disk_v, tmp[1], ret.orig);
     }
 
     vec3 du;
@@ -439,7 +437,7 @@ const int width = 400;
 const double aspect_ratio = 16.0 / 9.0;
 
 int sample_scene(void) {
-    // NOTE: we don't seed `rand` for more predictable results.
+    srand(1);
 
     camera cam = camera_init((vec3){-2.0, 2.0, 1.0}, (vec3){0.0, 0.0, -1.0},
                              PI * 10.0 / 180.0, 3.4, width, aspect_ratio,
