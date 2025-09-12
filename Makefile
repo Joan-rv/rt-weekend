@@ -3,7 +3,7 @@ CFLAGS?=-Wall -Wextra -Wpedantic -O3
 CFLAGS+=-Ilib/cglm/include
 LD=$(CC)
 LDFLAGS?=-O3 -flto
-LDFLAGS+=-lm
+LDFLAGS+=-lm -lSDL3
 
 OBJS=main.o
 

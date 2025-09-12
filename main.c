@@ -1,7 +1,10 @@
+#include <SDL3/SDL.h>
 #include <cglm/cglm.h>
 
 #include <float.h>
 #include <math.h>
+#include <pthread.h>
+#include <stdatomic.h>
 #include <stdio.h>
 
 #define PI 3.14159265358979323846
@@ -295,12 +298,16 @@ static double linear_to_gamma(double linear) {
     return 0.0;
 }
 
-void write_color(FILE *out, const color color) {
+SDL_Surface *surface;
+
+void write_color(FILE *out, int x, int y, const color color) {
     interval i = {0.0, 0.999};
     int r = 256.0 * interval_clamp(i, linear_to_gamma(color[0]));
     int g = 256.0 * interval_clamp(i, linear_to_gamma(color[1]));
     int b = 256.0 * interval_clamp(i, linear_to_gamma(color[2]));
     fprintf(out, "%d %d %d\n", r, g, b);
+    Uint32 *pixels = surface->pixels;
+    pixels[y * surface->w + x] = SDL_MapSurfaceRGB(surface, r, g, b);
 }
 
 typedef struct camera {
@@ -422,17 +429,20 @@ void camera_render(camera cam, hittable world) {
                 glm_vec3_add(color, sample_color, color);
             }
             glm_vec3_scale(color, 1.0 / cam.samples_per_px, color);
-            write_color(stdout, color);
+            write_color(stdout, j, i, color);
         }
     }
     fprintf(stderr, "\rDone                              \n");
 }
 
+const int width = 400;
+const double aspect_ratio = 16.0 / 9.0;
+
 int sample_scene(void) {
     // NOTE: we don't seed `rand` for more predictable results.
 
     camera cam = camera_init((vec3){-2.0, 2.0, 1.0}, (vec3){0.0, 0.0, -1.0},
-                             PI * 10.0 / 180.0, 3.4, 400, 16.0 / 9.0,
+                             PI * 10.0 / 180.0, 3.4, width, aspect_ratio,
                              PI * 20.0 / 180.0, 100, 50);
 
     lambertian mat_ground = {.albedo = {0.8, 0.8, 0.0}};
@@ -567,11 +577,59 @@ int cover_scene(void) {
     hittable_list world = {.objects = objects, .len = object_idx};
 
     camera cam = camera_init((vec3){13.0, 2.0, 3.0}, (vec3){0.0, 0.0, 0.0},
-                             PI * 0.6 / 180.0, 10.0, 1200, 16.0 / 9.0,
+                             PI * 0.6 / 180.0, 10.0, width, aspect_ratio,
                              PI * 20.0 / 180.0, 500, 50);
     camera_render(cam, hittable_list_hittable(&world));
 
     return 0;
 }
 
-int main(void) { return cover_scene(); }
+atomic_int rt_running = 0;
+
+void *rt_run(void *data) {
+    (void)data;
+    rt_running = 1;
+    sample_scene();
+    rt_running = 0;
+    return NULL;
+}
+
+int main(void) {
+    if (!SDL_Init(SDL_INIT_VIDEO)) {
+        SDL_Log("SDL_Init: %s", SDL_GetError());
+        return 1;
+    }
+    SDL_Window *window;
+    if (!(window = SDL_CreateWindow("rt", width, width / aspect_ratio, 0))) {
+        SDL_Log("SDL_CreateWindow: %s", SDL_GetError());
+        SDL_Quit();
+        return 1;
+    }
+    surface = SDL_GetWindowSurface(window);
+    assert(surface);
+    assert(!SDL_MUSTLOCK(surface));
+    assert(SDL_FillSurfaceRect(surface, NULL,
+                               SDL_MapSurfaceRGB(surface, 0x00, 0x00, 0x00)));
+
+    pthread_t rt_thrd;
+    assert(pthread_create(&rt_thrd, NULL, rt_run, NULL) == 0);
+
+    bool quit = false;
+    while (!quit) {
+        SDL_Event e;
+        while (SDL_PollEvent(&e)) {
+            if (e.type == SDL_EVENT_QUIT)
+                quit = true;
+        }
+        if (!rt_running)
+            quit = true;
+        assert(SDL_UpdateWindowSurface(window));
+    }
+    SDL_DestroyWindow(window);
+
+    assert(pthread_join(rt_thrd, NULL) == 0);
+
+    SDL_Quit();
+
+    return 0;
+}
