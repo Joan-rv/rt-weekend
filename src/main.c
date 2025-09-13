@@ -2,13 +2,14 @@
 #include "util.h"
 
 #include <SDL3/SDL.h>
+#include <stb_image_write.h>
 
 #include <float.h>
 #include <pthread.h>
 #include <stdatomic.h>
 
 const int width = 400;
-const float aspect_ratio = 16.0 / 9.0;
+const double aspect_ratio = 16.0 / 9.0;
 
 int sample_scene(pixel out_buf[]) {
     srand(1);
@@ -181,7 +182,7 @@ void *rt_run(void *data) {
     return NULL;
 }
 
-int main(void) {
+int main(int argc, char **argv) {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         SDL_Log("SDL_Init: %s", SDL_GetError());
         return 1;
@@ -223,6 +224,12 @@ int main(void) {
         }
 
         assert(SDL_UpdateWindowSurface(window));
+    }
+
+    if (argc >= 2) {
+        if (!stbi_write_png(argv[1], width, (int)(width / aspect_ratio),
+                            sizeof(pixel), out_buf, width * sizeof(pixel)))
+            fprintf(stderr, "failed to write image to %s\n", argv[1]);
     }
 
     rt_abort = true;
