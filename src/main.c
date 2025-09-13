@@ -10,13 +10,7 @@
 const int width = 400;
 const double aspect_ratio = 16.0 / 9.0;
 
-static void sdl_color_callback(int x, int y, int r, int g, int b, void *userp) {
-    SDL_Surface *surface = userp;
-    Uint32 *pixels = surface->pixels;
-    pixels[y * surface->w + x] = SDL_MapSurfaceRGB(surface, r, g, b);
-}
-
-int sample_scene(void *surface) {
+int sample_scene(pixel out_buf[]) {
     srand(1);
 
     camera cam = camera_init((camera_desc){
@@ -70,12 +64,11 @@ int sample_scene(void *surface) {
         .len = sizeof(objects) / sizeof(*objects),
     };
 
-    camera_render(cam, hittable_list_hittable(&world), sdl_color_callback,
-                  surface);
+    camera_render(cam, hittable_list_hittable(&world), out_buf);
     return 0;
 }
 
-int cover_scene(void *surface) {
+int cover_scene(pixel out_buf[]) {
     sphere spheres[22 * 22 + 4];
     int sphere_idx = 0;
     hittable objects[22 * 22 + 4];
@@ -174,8 +167,7 @@ int cover_scene(void *surface) {
         .samples_per_px = 500,
         .max_depth = 50,
     });
-    camera_render(cam, hittable_list_hittable(&world), sdl_color_callback,
-                  surface);
+    camera_render(cam, hittable_list_hittable(&world), out_buf);
 
     return 0;
 }
@@ -206,8 +198,11 @@ int main(void) {
     assert(SDL_FillSurfaceRect(surface, NULL,
                                SDL_MapSurfaceRGB(surface, 0x00, 0x00, 0x00)));
 
+    pixel out_buf[width * (int)(width / aspect_ratio)];
+    memset(out_buf, 0, sizeof(out_buf));
+
     pthread_t rt_thrd;
-    assert(pthread_create(&rt_thrd, NULL, rt_run, surface) == 0);
+    assert(pthread_create(&rt_thrd, NULL, rt_run, out_buf) == 0);
 
     bool quit = false;
     while (!quit) {
@@ -218,12 +213,22 @@ int main(void) {
         }
         if (!rt_running)
             quit = true;
+
+        Uint32 *pixels = surface->pixels;
+        for (int i = 0; i < surface->h; ++i) {
+            for (int j = 0; j < surface->w; ++j) {
+                pixel p = out_buf[i * surface->w + j];
+                pixels[i * surface->w + j] =
+                    SDL_MapSurfaceRGB(surface, p.r, p.g, p.b);
+            }
+        }
+
         assert(SDL_UpdateWindowSurface(window));
     }
-    SDL_DestroyWindow(window);
 
     assert(pthread_join(rt_thrd, NULL) == 0);
 
+    SDL_DestroyWindow(window);
     SDL_Quit();
 
     return 0;

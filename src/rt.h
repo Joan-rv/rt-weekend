@@ -4,6 +4,7 @@
 #include "util.h"
 
 #include <cglm/cglm.h>
+#include <stdint.h>
 
 typedef struct ray {
     vec3 orig;
@@ -67,6 +68,10 @@ typedef struct dielectric {
 
 material dielectric_material(dielectric *l);
 
+typedef struct pixel {
+    uint8_t r, g, b;
+} pixel;
+
 typedef struct camera {
     int image_width;
     int image_height;
@@ -86,9 +91,7 @@ typedef struct camera {
     int max_depth;
 } camera;
 
-typedef void (*color_callback)(int x, int y, int r, int g, int b, void *userp);
-
-void camera_render(camera cam, hittable world, color_callback c, void *userp);
+void camera_render(camera cam, hittable world, pixel out_buf[]);
 
 typedef struct camera_desc {
     int image_width;

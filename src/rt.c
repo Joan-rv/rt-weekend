@@ -180,14 +180,14 @@ static double linear_to_gamma(double linear) {
     return 0.0;
 }
 
-static void write_color(FILE *out, int x, int y, const color color,
-                        color_callback callback, void *userp) {
+static void write_color(int width, int x, int y, const color color,
+                        pixel out_buf[]) {
     interval i = {0.0, 0.999};
-    int r = 256.0 * interval_clamp(i, linear_to_gamma(color[0]));
-    int g = 256.0 * interval_clamp(i, linear_to_gamma(color[1]));
-    int b = 256.0 * interval_clamp(i, linear_to_gamma(color[2]));
-    fprintf(out, "%d %d %d\n", r, g, b);
-    callback(x, y, r, g, b, userp);
+    pixel p;
+    p.r = 256.0 * interval_clamp(i, linear_to_gamma(color[0]));
+    p.g = 256.0 * interval_clamp(i, linear_to_gamma(color[1]));
+    p.b = 256.0 * interval_clamp(i, linear_to_gamma(color[2]));
+    out_buf[width * y + x] = p;
 }
 
 static void random_square_offset(vec3 out) {
@@ -219,9 +219,8 @@ static ray camera_get_ray(camera cam, int i, int j) {
     return ret;
 }
 
-void camera_render(camera cam, hittable world, color_callback callback,
-                   void *userp) {
-    printf("P3\n%d %d\n255\n", cam.image_width, cam.image_height);
+void camera_render(camera cam, hittable world, pixel out_buf[]) {
+    // printf("P3\n%d %d\n255\n", cam.image_width, cam.image_height);
     for (int i = 0; i < cam.image_height; ++i) {
         fprintf(stderr, "\rScanlines remaining: %5d", cam.image_height - i);
         fflush(stderr);
@@ -234,7 +233,7 @@ void camera_render(camera cam, hittable world, color_callback callback,
                 glm_vec3_add(color, sample_color, color);
             }
             glm_vec3_scale(color, 1.0 / cam.samples_per_px, color);
-            write_color(stdout, j, i, color, callback, userp);
+            write_color(cam.image_width, j, i, color, out_buf);
         }
     }
     fprintf(stderr, "\rDone                              \n");
