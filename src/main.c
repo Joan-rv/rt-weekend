@@ -225,6 +225,7 @@ int main(void) {
         assert(SDL_UpdateWindowSurface(window));
     }
 
+    rt_abort = true;
     assert(pthread_join(rt_thrd, NULL) == 0);
 
     SDL_DestroyWindow(window);

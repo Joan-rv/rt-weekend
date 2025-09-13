@@ -1,5 +1,7 @@
 #include "rt.h"
 
+atomic_bool rt_abort = false;
+
 void ray_at(ray r, double t, vec3 out_pos) {
     glm_vec3_scale(r.dir, t, out_pos);
     glm_vec3_add(r.orig, out_pos, out_pos);
@@ -221,10 +223,10 @@ static ray camera_get_ray(camera cam, int i, int j) {
 
 void camera_render(camera cam, hittable world, pixel out_buf[]) {
     // printf("P3\n%d %d\n255\n", cam.image_width, cam.image_height);
-    for (int i = 0; i < cam.image_height; ++i) {
+    for (int i = 0; i < cam.image_height && !rt_abort; ++i) {
         fprintf(stderr, "\rScanlines remaining: %5d", cam.image_height - i);
         fflush(stderr);
-        for (int j = 0; j < cam.image_width; ++j) {
+        for (int j = 0; j < cam.image_width && !rt_abort; ++j) {
             color color = {0.0, 0.0, 0.0};
             for (int sample = 0; sample < cam.samples_per_px; ++sample) {
                 vec3 sample_color;

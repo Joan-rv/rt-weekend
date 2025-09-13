@@ -4,7 +4,10 @@
 #include "util.h"
 
 #include <cglm/cglm.h>
+#include <stdatomic.h>
 #include <stdint.h>
+
+extern atomic_bool rt_abort;
 
 typedef struct ray {
     vec3 orig;
