@@ -7,8 +7,6 @@
 #include <stdatomic.h>
 #include <stdint.h>
 
-extern atomic_bool rt_abort;
-
 typedef struct ray {
     vec3 orig;
     vec3 dir;
@@ -94,7 +92,7 @@ typedef struct camera {
     int max_depth;
 } camera;
 
-void camera_render(camera cam, hittable world, pixel out_buf[]);
+pixel render_pixel(camera cam, hittable world, int x, int y);
 
 typedef struct camera_desc {
     int image_width;

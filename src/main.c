@@ -4,12 +4,21 @@
 #include <SDL3/SDL.h>
 #include <stb_image_write.h>
 
-#include <float.h>
 #include <pthread.h>
 #include <stdatomic.h>
 
 const int width = 400;
 const double aspect_ratio = 16.0 / 9.0;
+
+atomic_bool rt_running = false;
+
+void render_scene(camera cam, hittable world, pixel out_buf[]) {
+    for (int y = 0; y < cam.image_height && rt_running; ++y) {
+        for (int x = 0; x < cam.image_width && rt_running; ++x) {
+            out_buf[cam.image_width * y + x] = render_pixel(cam, world, x, y);
+        }
+    }
+}
 
 int sample_scene(pixel out_buf[]) {
     srand(1);
@@ -65,7 +74,7 @@ int sample_scene(pixel out_buf[]) {
         .len = sizeof(objects) / sizeof(*objects),
     };
 
-    camera_render(cam, hittable_list_hittable(&world), out_buf);
+    render_scene(cam, hittable_list_hittable(&world), out_buf);
     return 0;
 }
 
@@ -168,17 +177,14 @@ int cover_scene(pixel out_buf[]) {
         .samples_per_px = 500,
         .max_depth = 50,
     });
-    camera_render(cam, hittable_list_hittable(&world), out_buf);
+    render_scene(cam, hittable_list_hittable(&world), out_buf);
 
     return 0;
 }
 
-atomic_int rt_running = 0;
-
 void *rt_run(void *data) {
-    rt_running = 1;
     sample_scene(data);
-    rt_running = 0;
+    rt_running = false;
     return NULL;
 }
 
@@ -201,18 +207,16 @@ int main(int argc, char **argv) {
 
     pixel *out_buf = calloc(width * width / aspect_ratio, sizeof(pixel));
 
+    rt_running = true;
     pthread_t rt_thrd;
     assert(pthread_create(&rt_thrd, NULL, rt_run, out_buf) == 0);
 
-    bool quit = false;
-    while (!quit) {
+    while (rt_running) {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_EVENT_QUIT)
-                quit = true;
+                rt_running = false;
         }
-        if (!rt_running)
-            quit = true;
 
         Uint32 *pixels = surface->pixels;
         for (int i = 0; i < surface->h; ++i) {
@@ -232,7 +236,6 @@ int main(int argc, char **argv) {
             fprintf(stderr, "failed to write image to %s\n", argv[1]);
     }
 
-    rt_abort = true;
     assert(pthread_join(rt_thrd, NULL) == 0);
 
     SDL_DestroyWindow(window);

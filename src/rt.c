@@ -1,7 +1,5 @@
 #include "rt.h"
 
-atomic_bool rt_abort = false;
-
 void ray_at(ray r, double t, vec3 out_pos) {
     glm_vec3_scale(r.dir, t, out_pos);
     glm_vec3_add(r.orig, out_pos, out_pos);
@@ -182,23 +180,13 @@ static double linear_to_gamma(double linear) {
     return 0.0;
 }
 
-static void write_color(int width, int x, int y, const color color,
-                        pixel out_buf[]) {
-    interval i = {0.0, 0.999};
-    pixel p;
-    p.r = 256.0 * interval_clamp(i, linear_to_gamma(color[0]));
-    p.g = 256.0 * interval_clamp(i, linear_to_gamma(color[1]));
-    p.b = 256.0 * interval_clamp(i, linear_to_gamma(color[2]));
-    out_buf[width * y + x] = p;
-}
-
 static void random_square_offset(vec3 out) {
     out[0] = random_double() - 0.5;
     out[1] = random_double() - 0.5;
     out[2] = 0.0;
 }
 
-static ray camera_get_ray(camera cam, int i, int j) {
+static ray camera_get_ray(camera cam, int x, int y) {
     ray ret;
     vec3 offset;
     random_square_offset(offset);
@@ -211,9 +199,9 @@ static ray camera_get_ray(camera cam, int i, int j) {
     }
 
     vec3 du;
-    glm_vec3_scale(cam.pixel_du, j + offset[0], du);
+    glm_vec3_scale(cam.pixel_du, x + offset[0], du);
     vec3 dv;
-    glm_vec3_scale(cam.pixel_dv, i + offset[1], dv);
+    glm_vec3_scale(cam.pixel_dv, y + offset[1], dv);
     vec3 px_center;
     glm_vec3_add(cam.pixel00, du, px_center);
     glm_vec3_add(px_center, dv, px_center);
@@ -221,25 +209,26 @@ static ray camera_get_ray(camera cam, int i, int j) {
     return ret;
 }
 
-void camera_render(camera cam, hittable world, pixel out_buf[]) {
-    // printf("P3\n%d %d\n255\n", cam.image_width, cam.image_height);
-    for (int i = 0; i < cam.image_height && !rt_abort; ++i) {
-        fprintf(stderr, "\rScanlines remaining: %5d", cam.image_height - i);
-        fflush(stderr);
-        for (int j = 0; j < cam.image_width && !rt_abort; ++j) {
-            color color = {0.0, 0.0, 0.0};
-            for (int sample = 0; sample < cam.samples_per_px; ++sample) {
-                vec3 sample_color;
-                ray ray = camera_get_ray(cam, i, j);
-                ray_color(ray, cam.max_depth, world, sample_color);
-                glm_vec3_add(color, sample_color, color);
-            }
-            glm_vec3_scale(color, 1.0 / cam.samples_per_px, color);
-            write_color(cam.image_width, j, i, color, out_buf);
-        }
+pixel render_pixel(camera cam, hittable world, int x, int y) {
+    assert(0 <= x && x < cam.image_width);
+    assert(0 <= y && y < cam.image_height);
+    color color = {0.0, 0.0, 0.0};
+    for (int sample = 0; sample < cam.samples_per_px; ++sample) {
+        vec3 sample_color;
+        ray ray = camera_get_ray(cam, x, y);
+        ray_color(ray, cam.max_depth, world, sample_color);
+        glm_vec3_add(color, sample_color, color);
     }
-    fprintf(stderr, "\rDone                              \n");
+    glm_vec3_scale(color, 1.0 / cam.samples_per_px, color);
+    interval i = {0.0, 0.999};
+    pixel p = {
+        .r = 256.0 * interval_clamp(i, linear_to_gamma(color[0])),
+        .g = 256.0 * interval_clamp(i, linear_to_gamma(color[1])),
+        .b = 256.0 * interval_clamp(i, linear_to_gamma(color[2])),
+    };
+    return p;
 }
+
 camera camera_init(camera_desc d) {
     camera ret;
     vec3 tmp;
