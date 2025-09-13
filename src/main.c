@@ -6,13 +6,69 @@
 
 #include <pthread.h>
 #include <stdatomic.h>
+#include <sys/sysinfo.h>
 
-const int width = 400;
+const int width = 2000;
 const double aspect_ratio = 16.0 / 9.0;
 
 atomic_bool rt_running = false;
 
+typedef struct render_range {
+    int px_start, px_end;
+} render_range;
+
+void render_scene_range(camera cam, hittable world, pixel out_buf[],
+                        render_range r) {
+    for (int px = r.px_start; px < r.px_end && rt_running; ++px) {
+        int x = px % cam.image_width;
+        int y = px / cam.image_width;
+        out_buf[cam.image_width * y + x] = render_pixel(cam, world, x, y);
+    }
+}
+
+typedef struct render_thread_args {
+    camera cam;
+    hittable world;
+    pixel *out_buf;
+    render_range range;
+} render_thread_args;
+
+void *render_thread(void *data) {
+    render_thread_args *args = data;
+    seed_rng(1);
+    render_scene_range(args->cam, args->world, args->out_buf, args->range);
+    return NULL;
+}
+
 void render_scene(camera cam, hittable world, pixel out_buf[]) {
+    int nproc = get_nprocs();
+    int num_pixels = cam.image_width * cam.image_height;
+    int px_per_thread = num_pixels / nproc;
+    render_thread_args thread_args[nproc];
+    pthread_t threads[nproc];
+    for (int i = 0; i < nproc; ++i) {
+        int px_start = i * px_per_thread;
+        int px_end = (i + 1) * px_per_thread;
+        thread_args[i] = (render_thread_args){
+            .cam = cam,
+            .world = world,
+            .out_buf = out_buf,
+            .range =
+                (render_range){
+                    .px_start = px_start,
+                    .px_end = (i + 1 == nproc ? num_pixels : px_end),
+                },
+        };
+        assert(pthread_create(&threads[i], NULL, render_thread,
+                              &thread_args[i]) == 0);
+    }
+
+    for (int i = 0; i < nproc; ++i) {
+        assert(pthread_join(threads[i], NULL) == 0);
+    }
+}
+
+void render_scene2(camera cam, hittable world, pixel out_buf[]) {
     for (int y = 0; y < cam.image_height && rt_running; ++y) {
         for (int x = 0; x < cam.image_width && rt_running; ++x) {
             out_buf[cam.image_width * y + x] = render_pixel(cam, world, x, y);

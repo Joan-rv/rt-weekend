@@ -1,12 +1,29 @@
 #include "util.h"
 
 #include <float.h>
+#include <threads.h>
 
 const double infinity = DBL_MAX;
 
 int maxi(int a, int b) { return a < b ? b : a; }
 
-double random_double(void) { return rand() / (RAND_MAX + 1.0); }
+thread_local uint32_t rng_state = 1;
+
+void seed_rng(uint32_t seed) {
+    assert(seed != 0);
+    rng_state = seed;
+}
+
+uint32_t random_u32(void) {
+    uint32_t x = rng_state;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    rng_state = x;
+    return x;
+}
+
+double random_double(void) { return random_u32() / (UINT32_MAX + 1.0); }
 
 void random_vec3(vec3 out) {
     out[0] = 2.0 * random_double() - 1.0;

@@ -12,8 +12,9 @@ extern const double infinity;
 
 int maxi(int a, int b);
 
+void seed_rng(uint32_t seed);
+uint32_t random_u32(void);
 double random_double(void);
-
 void random_vec3(vec3 out);
 void random_normalized_vec3(vec3 out);
 void random_in_unit_disc_vec3(vec3 out);
