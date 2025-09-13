@@ -8,7 +8,7 @@
 #include <stdatomic.h>
 
 const int width = 400;
-const double aspect_ratio = 16.0 / 9.0;
+const float aspect_ratio = 16.0 / 9.0;
 
 int sample_scene(pixel out_buf[]) {
     srand(1);
@@ -198,8 +198,7 @@ int main(void) {
     assert(SDL_FillSurfaceRect(surface, NULL,
                                SDL_MapSurfaceRGB(surface, 0x00, 0x00, 0x00)));
 
-    pixel out_buf[width * (int)(width / aspect_ratio)];
-    memset(out_buf, 0, sizeof(out_buf));
+    pixel *out_buf = calloc(width * width / aspect_ratio, sizeof(pixel));
 
     pthread_t rt_thrd;
     assert(pthread_create(&rt_thrd, NULL, rt_run, out_buf) == 0);
@@ -230,6 +229,8 @@ int main(void) {
 
     SDL_DestroyWindow(window);
     SDL_Quit();
+
+    free(out_buf);
 
     return 0;
 }
