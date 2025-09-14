@@ -30,25 +30,16 @@ typedef struct hit_record {
     bool front_face;
 } hit_record;
 
-typedef struct hittable {
-    bool (*hit)(ray r, interval valid_t, hit_record *out, void *self);
-    void *self;
-} hittable;
-
 typedef struct sphere {
     vec3 center;
     double radius;
     material mat;
 } sphere;
 
-hittable sphere_hittable(sphere *s);
-
-typedef struct hittable_list {
-    hittable *objects;
-    size_t len;
-} hittable_list;
-
-hittable hittable_list_hittable(hittable_list *h);
+typedef struct world {
+    sphere *spheres;
+    size_t num_spheres;
+} world;
 
 typedef struct lambertian {
     color albedo;
@@ -92,7 +83,7 @@ typedef struct camera {
     int max_depth;
 } camera;
 
-pixel render_pixel(camera cam, hittable world, int x, int y);
+pixel render_pixel(camera cam, world w, int x, int y);
 
 typedef struct camera_desc {
     int image_width;

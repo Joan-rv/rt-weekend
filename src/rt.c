@@ -11,13 +11,12 @@ static void hit_set_front_face(ray r, hit_record *rec) {
         glm_vec3_negate(rec->norm);
 }
 
-static bool sphere_hit(ray r, interval t, hit_record *out, void *self) {
-    sphere *s = self;
+static bool sphere_hit(sphere s, ray r, interval t, hit_record *out) {
     vec3 oc;
-    glm_vec3_sub(s->center, r.orig, oc);
+    glm_vec3_sub(s.center, r.orig, oc);
     double a = glm_vec3_norm2(r.dir);
     double h = glm_vec3_dot(r.dir, oc);
-    double c = glm_vec3_norm2(oc) - s->radius * s->radius;
+    double c = glm_vec3_norm2(oc) - s.radius * s.radius;
     double discriminant = h * h - a * c;
     if (discriminant < 0.0)
         return false;
@@ -29,32 +28,24 @@ static bool sphere_hit(ray r, interval t, hit_record *out, void *self) {
             return false;
     }
 
-    out->mat = s->mat;
+    out->mat = s.mat;
     ray_at(r, root, out->p);
-    glm_vec3_sub(out->p, s->center, out->norm);
-    glm_vec3_scale(out->norm, 1.0 / s->radius, out->norm);
+    glm_vec3_sub(out->p, s.center, out->norm);
+    glm_vec3_scale(out->norm, 1.0 / s.radius, out->norm);
     out->t = root;
     hit_set_front_face(r, out);
 
     return true;
 }
 
-hittable sphere_hittable(sphere *s) {
-    return (hittable){
-        .hit = sphere_hit,
-        .self = s,
-    };
-}
-
-static bool hittable_list_hit(ray r, interval t, hit_record *out, void *self) {
-    hittable_list *s = self;
+static bool world_hit(world self, ray r, interval valid_t, hit_record *out) {
     hit_record tmp_rec;
     bool hit_anything = false;
-    double closest = t.max;
+    double closest = valid_t.max;
 
-    for (size_t i = 0; i < s->len; ++i) {
-        if (s->objects[i].hit(r, (interval){t.min, closest}, &tmp_rec,
-                              s->objects[i].self)) {
+    for (size_t i = 0; i < self.num_spheres; ++i) {
+        if (sphere_hit(self.spheres[i], r, (interval){valid_t.min, closest},
+                       &tmp_rec)) {
             hit_anything = true;
             closest = tmp_rec.t;
             *out = tmp_rec;
@@ -62,13 +53,6 @@ static bool hittable_list_hit(ray r, interval t, hit_record *out, void *self) {
     }
 
     return hit_anything;
-}
-
-hittable hittable_list_hittable(hittable_list *h) {
-    return (hittable){
-        .hit = hittable_list_hit,
-        .self = h,
-    };
 }
 
 static bool lambertian_scatter(ray r, hit_record h, color out_attenuation,
@@ -147,17 +131,17 @@ material dielectric_material(dielectric *d) {
     };
 }
 
-static void ray_color(ray r, int depth, hittable world, color out) {
+static void ray_color(ray r, int depth, world w, color out) {
     if (depth <= 0) {
         glm_vec3_copy((color){0.0, 0.0, 0.0}, out);
         return;
     }
     hit_record h;
-    if (world.hit(r, (interval){0.001, infinity}, &h, world.self)) {
+    if (world_hit(w, r, (interval){0.001, infinity}, &h)) {
         ray scattered;
         color attenuation;
         if (h.mat.scatter(r, h, attenuation, &scattered, h.mat.self)) {
-            ray_color(scattered, depth - 1, world, out);
+            ray_color(scattered, depth - 1, w, out);
             glm_vec3_mul(out, attenuation, out);
             return;
         }
@@ -209,14 +193,14 @@ static ray camera_get_ray(camera cam, int x, int y) {
     return ret;
 }
 
-pixel render_pixel(camera cam, hittable world, int x, int y) {
+pixel render_pixel(camera cam, world w, int x, int y) {
     assert(0 <= x && x < cam.image_width);
     assert(0 <= y && y < cam.image_height);
     color color = {0.0, 0.0, 0.0};
     for (int sample = 0; sample < cam.samples_per_px; ++sample) {
         vec3 sample_color;
         ray ray = camera_get_ray(cam, x, y);
-        ray_color(ray, cam.max_depth, world, sample_color);
+        ray_color(ray, cam.max_depth, w, sample_color);
         glm_vec3_add(color, sample_color, color);
     }
     glm_vec3_scale(color, 1.0 / cam.samples_per_px, color);

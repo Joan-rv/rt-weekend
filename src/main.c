@@ -17,18 +17,17 @@ typedef struct render_range {
     int px_start, px_end;
 } render_range;
 
-void render_scene_range(camera cam, hittable world, pixel out_buf[],
-                        render_range r) {
+void render_scene_range(camera cam, world w, pixel out_buf[], render_range r) {
     for (int px = r.px_start; px < r.px_end && rt_running; ++px) {
         int x = px % cam.image_width;
         int y = px / cam.image_width;
-        out_buf[cam.image_width * y + x] = render_pixel(cam, world, x, y);
+        out_buf[cam.image_width * y + x] = render_pixel(cam, w, x, y);
     }
 }
 
 typedef struct render_thread_args {
     camera cam;
-    hittable world;
+    world world;
     pixel *out_buf;
     render_range range;
 } render_thread_args;
@@ -40,7 +39,7 @@ void *render_thread(void *data) {
     return NULL;
 }
 
-void render_scene(camera cam, hittable world, pixel out_buf[]) {
+void render_scene(camera cam, world w, pixel out_buf[]) {
     int nproc = get_nprocs();
     int num_pixels = cam.image_width * cam.image_height;
     int px_per_thread = num_pixels / nproc;
@@ -51,7 +50,7 @@ void render_scene(camera cam, hittable world, pixel out_buf[]) {
         int px_end = (i + 1) * px_per_thread;
         thread_args[i] = (render_thread_args){
             .cam = cam,
-            .world = world,
+            .world = w,
             .out_buf = out_buf,
             .range =
                 (render_range){
@@ -68,10 +67,10 @@ void render_scene(camera cam, hittable world, pixel out_buf[]) {
     }
 }
 
-void render_scene2(camera cam, hittable world, pixel out_buf[]) {
+void render_scene2(camera cam, world w, pixel out_buf[]) {
     for (int y = 0; y < cam.image_height && rt_running; ++y) {
         for (int x = 0; x < cam.image_width && rt_running; ++x) {
-            out_buf[cam.image_width * y + x] = render_pixel(cam, world, x, y);
+            out_buf[cam.image_width * y + x] = render_pixel(cam, w, x, y);
         }
     }
 }
@@ -97,48 +96,45 @@ int sample_scene(pixel out_buf[]) {
     dielectric mat_bubble = {1.0 / 1.5};
     metal mat_right = {.albedo = {0.8, 0.6, 0.2}, .fuzziness = 1.0};
 
-    sphere sphere1 = {
-        .center = {0.0, 0.0, -1.0},
-        .radius = 0.5,
-        .mat = lambertian_material(&mat_center),
+    sphere spheres[] = {
+        {
+            .center = {0.0, 0.0, -1.0},
+            .radius = 0.5,
+            .mat = lambertian_material(&mat_center),
+        },
+        {
+            .center = {0.0, -100.5, -1.0},
+            .radius = 100.0,
+            .mat = lambertian_material(&mat_ground),
+        },
+        {
+            .center = {-1.0, 0.0, -1.0},
+            .radius = 0.5,
+            .mat = dielectric_material(&mat_left),
+        },
+        {
+            .center = {-1.0, 0.0, -1.0},
+            .radius = 0.4,
+            .mat = dielectric_material(&mat_bubble),
+        },
+        {
+            .center = {1.0, 0.0, -1.0},
+            .radius = 0.5,
+            .mat = metal_material(&mat_right),
+        },
     };
-    sphere sphere2 = {
-        .center = {0.0, -100.5, -1.0},
-        .radius = 100.0,
-        .mat = lambertian_material(&mat_ground),
-    };
-    sphere sphere3 = {
-        .center = {-1.0, 0.0, -1.0},
-        .radius = 0.5,
-        .mat = dielectric_material(&mat_left),
-    };
-    sphere sphere4 = {
-        .center = {-1.0, 0.0, -1.0},
-        .radius = 0.4,
-        .mat = dielectric_material(&mat_bubble),
-    };
-    sphere sphere5 = {
-        .center = {1.0, 0.0, -1.0},
-        .radius = 0.5,
-        .mat = metal_material(&mat_right),
-    };
-    hittable objects[] = {sphere_hittable(&sphere1), sphere_hittable(&sphere2),
-                          sphere_hittable(&sphere3), sphere_hittable(&sphere4),
-                          sphere_hittable(&sphere5)};
-    hittable_list world = {
-        .objects = objects,
-        .len = sizeof(objects) / sizeof(*objects),
+    world w = {
+        .spheres = spheres,
+        .num_spheres = sizeof(spheres) / sizeof(*spheres),
     };
 
-    render_scene(cam, hittable_list_hittable(&world), out_buf);
+    render_scene(cam, w, out_buf);
     return 0;
 }
 
 int cover_scene(pixel out_buf[]) {
     sphere spheres[22 * 22 + 4];
     int sphere_idx = 0;
-    hittable objects[22 * 22 + 4];
-    int object_idx = 0;
     lambertian lambertians[22 * 22 + 4];
     int lambertian_idx = 0;
     metal metals[22 * 22 + 4];
@@ -217,10 +213,7 @@ int cover_scene(pixel out_buf[]) {
         .mat = metal_material(&metals[metal_idx - 1]),
     };
 
-    for (int i = 0; i < sphere_idx; ++i) {
-        objects[object_idx++] = sphere_hittable(&spheres[i]);
-    }
-    hittable_list world = {.objects = objects, .len = object_idx};
+    world w = {.spheres = spheres, .num_spheres = sphere_idx};
 
     camera cam = camera_init((camera_desc){
         .lookfrom = {13.0, 2.0, 3.0},
@@ -233,7 +226,7 @@ int cover_scene(pixel out_buf[]) {
         .samples_per_px = 500,
         .max_depth = 50,
     });
-    render_scene(cam, hittable_list_hittable(&world), out_buf);
+    render_scene(cam, w, out_buf);
 
     return 0;
 }
