@@ -3,6 +3,12 @@ rt
 
 .cache
 compile_commands.json
+
+*.png
+*.ppm
+*.jpg
+*.jpeg
+
 # Added by cargo
 
 /target
