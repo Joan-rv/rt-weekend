@@ -65,16 +65,16 @@ impl Ray {
     }
 }
 
-pub struct HitRecord {
+pub struct HitRecord<'material> {
     pub point: Vec3,
     pub normal: Vec3,
-    pub material: Arc<dyn Material>,
+    pub material: &'material dyn Material,
     pub t: f32,
     pub front_face: bool,
 }
 
 pub trait Hittable: Sync + Send {
-    fn hit(&self, ray: &Ray, valid_t: Interval) -> Option<HitRecord>;
+    fn hit(&self, ray: &Ray, valid_t: Interval) -> Option<HitRecord<'_>>;
 }
 
 pub trait Material: Sync + Send {
@@ -215,7 +215,7 @@ struct Sphere {
 }
 
 impl Hittable for Sphere {
-    fn hit(&self, ray: &Ray, valid_t: Interval) -> Option<HitRecord> {
+    fn hit(&self, ray: &Ray, valid_t: Interval) -> Option<HitRecord<'_>> {
         let oc = self.center - ray.origin;
         let a = ray.direction.length_squared();
         let h = ray.direction.dot(oc);
@@ -244,14 +244,14 @@ impl Hittable for Sphere {
             point,
             normal,
             t: root,
-            material: self.material.clone(),
+            material: &*self.material,
             front_face,
         })
     }
 }
 
 impl Hittable for Vec<Box<dyn Hittable>> {
-    fn hit(&self, ray: &Ray, valid_t: Interval) -> Option<HitRecord> {
+    fn hit(&self, ray: &Ray, valid_t: Interval) -> Option<HitRecord<'_>> {
         let mut closest_hit = None;
         let mut closest_interval = valid_t;
         for hittable in self {
@@ -384,7 +384,7 @@ fn sample_scene() -> (Camera, Box<dyn Hittable>) {
         look_at: Vec3::new(0.0, 0.0, -1.0),
         defocus_angle: PI * 10.0 / 180.0,
         focus_dist: 3.4,
-        image_width: 2000,
+        image_width: 800,
         aspect_raio: 16.0 / 9.0,
         fovy: PI * 20.0 / 180.0,
         samples_per_px: 100,
@@ -446,32 +446,15 @@ fn main() -> anyhow::Result<()> {
     let image = Mutex::new(RgbImage::new(camera.width(), camera.height()));
 
     let bar = ProgressBar::new((camera.width() * camera.height()).into());
-    (0..camera.height()).into_par_iter().for_each(|y| {
-        for x in 0..camera.width() {
+    (0..camera.height())
+        .into_par_iter()
+        .flat_map(|y| (0..camera.width()).into_par_iter().map(move |x| (x, y)))
+        .for_each(|(x, y)| {
             bar.inc(1);
             let rgb = color_to_rgb(render_pixel(&camera, &*world, UVec2::new(x, y)));
             image.lock().unwrap().put_pixel(x, y, rgb);
-        }
-    });
+        });
     bar.finish();
-
-    /*
-    for y in 0..camera.height() {
-        for x in 0..camera.width() {
-            eprint!(
-                "\r{}/{}",
-                y * camera.width() + x,
-                camera.width() * camera.height()
-            );
-            image.put_pixel(
-                x,
-                y,
-                color_to_rgb(render_pixel(&camera, &*world, UVec2::new(x, y))),
-            );
-        }
-    }
-    println!("");
-    */
 
     image.lock().unwrap().save("im.png")?;
 
