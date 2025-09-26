@@ -1,10 +1,13 @@
 use glam::{UVec2, Vec3};
 use image::{Rgb, RgbImage};
 use indicatif::ProgressBar;
+use minifb::{Window, WindowOptions};
 use rayon::prelude::*;
+use std::sync::mpsc;
+use std::thread;
 use std::{
     f32::consts::{FRAC_PI_4, PI},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 pub const INFINITY: f32 = std::f32::MAX;
@@ -384,7 +387,7 @@ fn sample_scene() -> (Camera, Box<dyn Hittable>) {
         look_at: Vec3::new(0.0, 0.0, -1.0),
         defocus_angle: PI * 10.0 / 180.0,
         focus_dist: 3.4,
-        image_width: 800,
+        image_width: 2000,
         aspect_raio: 16.0 / 9.0,
         fovy: PI * 20.0 / 180.0,
         samples_per_px: 100,
@@ -441,22 +444,63 @@ fn sample_scene() -> (Camera, Box<dyn Hittable>) {
     (camera, Box::new(spheres))
 }
 
+struct Pixel {
+    x: u32,
+    y: u32,
+    color: Rgb<u8>,
+}
+
+fn gfx_thread(width: u32, height: u32, receiver: mpsc::Receiver<Pixel>) -> anyhow::Result<()> {
+    let mut image = RgbImage::new(width, height);
+    let mut window = Window::new(
+        "rt",
+        width as usize,
+        height as usize,
+        WindowOptions::default(),
+    )?;
+    window.set_target_fps(240);
+    let mut buffer = vec![0x000000u32; width as usize * height as usize];
+    'window: while window.is_open() {
+        loop {
+            match receiver.try_recv() {
+                Ok(px) => {
+                    image.put_pixel(px.x, px.y, px.color);
+                    buffer[(px.y * width + px.x) as usize] =
+                        u32::from_be_bytes([0x00, px.color[0], px.color[1], px.color[2]]);
+                }
+                Err(mpsc::TryRecvError::Disconnected) => break 'window,
+                Err(mpsc::TryRecvError::Empty) => break,
+            }
+        }
+        window.update_with_buffer(&buffer, width as usize, height as usize)?;
+    }
+
+    image.save("im.png")?;
+
+    Ok(())
+}
+
 fn main() -> anyhow::Result<()> {
     let (camera, world) = sample_scene();
-    let image = Mutex::new(RgbImage::new(camera.width(), camera.height()));
+
+    let (sender, receiver) = mpsc::channel();
+
+    let width = camera.width();
+    let height = camera.height();
+    let gfx_thread = thread::spawn(move || gfx_thread(width, height, receiver));
 
     let bar = ProgressBar::new((camera.width() * camera.height()).into());
     (0..camera.height())
         .into_par_iter()
         .flat_map(|y| (0..camera.width()).into_par_iter().map(move |x| (x, y)))
-        .for_each(|(x, y)| {
+        .for_each_with(sender, |sender, (x, y)| {
             bar.inc(1);
-            let rgb = color_to_rgb(render_pixel(&camera, &*world, UVec2::new(x, y)));
-            image.lock().unwrap().put_pixel(x, y, rgb);
+            let color = color_to_rgb(render_pixel(&camera, &*world, UVec2::new(x, y)));
+            sender.send(Pixel { x, y, color }).unwrap();
         });
     bar.finish();
 
-    image.lock().unwrap().save("im.png")?;
+    gfx_thread.join().unwrap()?;
 
     Ok(())
 }
