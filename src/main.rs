@@ -1,9 +1,13 @@
 use glam::{UVec2, Vec3};
 use image::{Rgb, RgbImage};
-use std::{f32::consts::FRAC_PI_4, rc::Rc};
+use std::{
+    f32::consts::{FRAC_PI_4, PI},
+    rc::Rc,
+};
 
 pub const INFINITY: f32 = std::f32::MAX;
 
+#[derive(Debug, Clone, Copy)]
 pub struct Interval {
     pub min: f32,
     pub max: f32,
@@ -173,7 +177,7 @@ impl Camera {
     }
 }
 
-fn ray_color(ray: &Ray, depth: u32, world: &impl Hittable) -> Vec3 {
+fn ray_color(ray: &Ray, depth: u32, world: &dyn Hittable) -> Vec3 {
     if depth == 0 {
         return Vec3::ZERO;
     }
@@ -194,7 +198,7 @@ fn ray_color(ray: &Ray, depth: u32, world: &impl Hittable) -> Vec3 {
     (1.0 - a) * Vec3::new(1.0, 1.0, 1.0) + a * Vec3::new(0.5, 0.7, 1.0)
 }
 
-pub fn render_pixel(camera: &Camera, world: &impl Hittable, coords: UVec2) -> Vec3 {
+pub fn render_pixel(camera: &Camera, world: &dyn Hittable, coords: UVec2) -> Vec3 {
     let mut color = Vec3::ZERO;
     for _ in 0..camera.samples_per_px {
         color += ray_color(&camera.get_ray(coords), camera.max_depth, world);
@@ -244,6 +248,20 @@ impl Hittable for Sphere {
     }
 }
 
+impl Hittable for Vec<Box<dyn Hittable>> {
+    fn hit(&self, ray: &Ray, valid_t: Interval) -> Option<HitRecord> {
+        let mut closest_hit = None;
+        let mut closest_interval = valid_t;
+        for hittable in self {
+            if let Some(record) = hittable.hit(ray, closest_interval) {
+                closest_interval.max = record.t;
+                closest_hit = Some(record);
+            }
+        }
+        closest_hit
+    }
+}
+
 pub struct Lambertian {
     pub albedo: Vec3,
 }
@@ -264,6 +282,64 @@ impl Material for Lambertian {
     }
 }
 
+pub struct Metal {
+    albedo: Vec3,
+    fuzziness: f32,
+}
+
+impl Material for Metal {
+    fn scatter(&self, ray: &Ray, record: &HitRecord) -> Option<(Vec3, Ray)> {
+        Some((
+            self.albedo,
+            Ray {
+                origin: record.point,
+                direction: ray.direction.reflect(record.normal)
+                    + self.fuzziness * random_unit_vec3(),
+            },
+        ))
+    }
+}
+
+pub struct Dielectric {
+    refraction_index: f32,
+}
+
+impl Dielectric {
+    fn reflectance(&self, cos_theta: f32) -> f32 {
+        // Schlick's approximation for reflectance
+        let r0 = (1.0 - self.refraction_index) / (1.0 + self.refraction_index);
+        let r0 = r0 * r0;
+        r0 + (1.0 - r0) * (1.0 - cos_theta).powi(5)
+    }
+}
+
+impl Material for Dielectric {
+    fn scatter(&self, ray: &Ray, record: &HitRecord) -> Option<(Vec3, Ray)> {
+        let refraction_index = if record.front_face {
+            1.0 / self.refraction_index
+        } else {
+            self.refraction_index
+        };
+        let unit_direction = ray.direction.normalize();
+        let cos_theta = (-unit_direction).dot(record.normal).min(1.0);
+        let sin_theta = (1.0 - cos_theta * cos_theta).sqrt();
+        let cannot_refract = refraction_index * sin_theta > 1.0;
+        let direction = if cannot_refract || self.reflectance(cos_theta) > rand::random() {
+            unit_direction.reflect(record.normal)
+        } else {
+            unit_direction.refract(record.normal, refraction_index)
+        };
+
+        Some((
+            Vec3::ONE,
+            Ray {
+                origin: record.point,
+                direction,
+            },
+        ))
+    }
+}
+
 fn color_to_rgb(color: Vec3) -> Rgb<u8> {
     Rgb((256.0
         * color
@@ -273,7 +349,7 @@ fn color_to_rgb(color: Vec3) -> Rgb<u8> {
     .to_array())
 }
 
-fn main() -> anyhow::Result<()> {
+fn simple_scene() -> (Camera, Box<dyn Hittable>) {
     let material = Rc::new(Lambertian {
         albedo: Vec3::new(1.0, 0.0, 0.0),
     });
@@ -297,6 +373,74 @@ fn main() -> anyhow::Result<()> {
         samples_per_px: 10,
     });
 
+    (camera, Box::new(world))
+}
+
+fn sample_scene() -> (Camera, Box<dyn Hittable>) {
+    let camera = Camera::new(&CameraDesc {
+        look_from: Vec3::new(-2.0, 2.0, 1.0),
+        look_at: Vec3::new(0.0, 0.0, -1.0),
+        defocus_angle: PI * 10.0 / 180.0,
+        focus_dist: 3.4,
+        image_width: 400,
+        aspect_raio: 16.0 / 9.0,
+        fovy: PI * 20.0 / 180.0,
+        samples_per_px: 100,
+        max_depth: 50,
+    });
+
+    let mat_ground = Rc::new(Lambertian {
+        albedo: Vec3::new(0.8, 0.8, 0.0),
+    });
+    let mat_center = Rc::new(Lambertian {
+        albedo: Vec3::new(0.1, 0.2, 0.5),
+    });
+    let mat_left = Rc::new(Dielectric {
+        refraction_index: 1.5,
+    });
+    let mat_bubble = Rc::new(Dielectric {
+        refraction_index: 1.0 / 1.5,
+    });
+    let mat_right = Rc::new(Metal {
+        albedo: Vec3::new(0.8, 0.6, 0.2),
+        fuzziness: 1.0,
+    });
+
+    let spheres: Vec<_> = vec![
+        Sphere {
+            center: Vec3::new(0.0, 0.0, -1.0),
+            radius: 0.5,
+            material: mat_center.clone(),
+        },
+        Sphere {
+            center: Vec3::new(0.0, -100.5, -1.0),
+            radius: 100.0,
+            material: mat_ground.clone(),
+        },
+        Sphere {
+            center: Vec3::new(-1.0, 0.0, -1.0),
+            radius: 0.5,
+            material: mat_left.clone(),
+        },
+        Sphere {
+            center: Vec3::new(-1.0, 0.0, -1.0),
+            radius: 0.4,
+            material: mat_bubble.clone(),
+        },
+        Sphere {
+            center: Vec3::new(1.0, 0.0, -1.0),
+            radius: 0.5,
+            material: mat_right.clone(),
+        },
+    ]
+    .into_iter()
+    .map(|s| Box::new(s) as Box<dyn Hittable>)
+    .collect();
+    (camera, Box::new(spheres))
+}
+
+fn main() -> anyhow::Result<()> {
+    let (camera, world) = sample_scene();
     let mut image = RgbImage::new(camera.width(), camera.height());
 
     for y in 0..camera.height() {
@@ -309,7 +453,7 @@ fn main() -> anyhow::Result<()> {
             image.put_pixel(
                 x,
                 y,
-                color_to_rgb(render_pixel(&camera, &world, UVec2::new(x, y))),
+                color_to_rgb(render_pixel(&camera, &*world, UVec2::new(x, y))),
             );
         }
     }
