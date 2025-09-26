@@ -1,8 +1,10 @@
 use glam::{UVec2, Vec3};
 use image::{Rgb, RgbImage};
+use indicatif::ProgressBar;
+use rayon::prelude::*;
 use std::{
     f32::consts::{FRAC_PI_4, PI},
-    rc::Rc,
+    sync::{Arc, Mutex},
 };
 
 pub const INFINITY: f32 = std::f32::MAX;
@@ -66,16 +68,16 @@ impl Ray {
 pub struct HitRecord {
     pub point: Vec3,
     pub normal: Vec3,
-    pub material: Rc<dyn Material>,
+    pub material: Arc<dyn Material>,
     pub t: f32,
     pub front_face: bool,
 }
 
-pub trait Hittable {
+pub trait Hittable: Sync + Send {
     fn hit(&self, ray: &Ray, valid_t: Interval) -> Option<HitRecord>;
 }
 
-pub trait Material {
+pub trait Material: Sync + Send {
     fn scatter(&self, ray: &Ray, record: &HitRecord) -> Option<(Vec3, Ray)>;
 }
 
@@ -209,7 +211,7 @@ pub fn render_pixel(camera: &Camera, world: &dyn Hittable, coords: UVec2) -> Vec
 struct Sphere {
     center: Vec3,
     radius: f32,
-    material: Rc<dyn Material>,
+    material: Arc<dyn Material>,
 }
 
 impl Hittable for Sphere {
@@ -350,7 +352,7 @@ fn color_to_rgb(color: Vec3) -> Rgb<u8> {
 }
 
 fn simple_scene() -> (Camera, Box<dyn Hittable>) {
-    let material = Rc::new(Lambertian {
+    let material = Arc::new(Lambertian {
         albedo: Vec3::new(1.0, 0.0, 0.0),
     });
     let world = Sphere {
@@ -382,26 +384,26 @@ fn sample_scene() -> (Camera, Box<dyn Hittable>) {
         look_at: Vec3::new(0.0, 0.0, -1.0),
         defocus_angle: PI * 10.0 / 180.0,
         focus_dist: 3.4,
-        image_width: 400,
+        image_width: 2000,
         aspect_raio: 16.0 / 9.0,
         fovy: PI * 20.0 / 180.0,
         samples_per_px: 100,
         max_depth: 50,
     });
 
-    let mat_ground = Rc::new(Lambertian {
+    let mat_ground = Arc::new(Lambertian {
         albedo: Vec3::new(0.8, 0.8, 0.0),
     });
-    let mat_center = Rc::new(Lambertian {
+    let mat_center = Arc::new(Lambertian {
         albedo: Vec3::new(0.1, 0.2, 0.5),
     });
-    let mat_left = Rc::new(Dielectric {
+    let mat_left = Arc::new(Dielectric {
         refraction_index: 1.5,
     });
-    let mat_bubble = Rc::new(Dielectric {
+    let mat_bubble = Arc::new(Dielectric {
         refraction_index: 1.0 / 1.5,
     });
-    let mat_right = Rc::new(Metal {
+    let mat_right = Arc::new(Metal {
         albedo: Vec3::new(0.8, 0.6, 0.2),
         fuzziness: 1.0,
     });
@@ -441,8 +443,19 @@ fn sample_scene() -> (Camera, Box<dyn Hittable>) {
 
 fn main() -> anyhow::Result<()> {
     let (camera, world) = sample_scene();
-    let mut image = RgbImage::new(camera.width(), camera.height());
+    let image = Mutex::new(RgbImage::new(camera.width(), camera.height()));
 
+    let bar = ProgressBar::new((camera.width() * camera.height()).into());
+    (0..camera.height()).into_par_iter().for_each(|y| {
+        for x in 0..camera.width() {
+            bar.inc(1);
+            let rgb = color_to_rgb(render_pixel(&camera, &*world, UVec2::new(x, y)));
+            image.lock().unwrap().put_pixel(x, y, rgb);
+        }
+    });
+    bar.finish();
+
+    /*
     for y in 0..camera.height() {
         for x in 0..camera.width() {
             eprint!(
@@ -458,8 +471,9 @@ fn main() -> anyhow::Result<()> {
         }
     }
     println!("");
+    */
 
-    image.save("im.png")?;
+    image.lock().unwrap().save("im.png")?;
 
     Ok(())
 }
