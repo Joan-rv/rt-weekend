@@ -127,6 +127,7 @@ fn gfx_thread(width: u32, height: u32, receiver: mpsc::Receiver<Pixel>) -> anyho
         WindowOptions::default(),
     )?;
     window.set_target_fps(240);
+
     let mut buffer = vec![0x000000u32; width as usize * height as usize];
     'window: while window.is_open() {
         loop {
@@ -161,11 +162,12 @@ fn main() -> anyhow::Result<()> {
     (0..camera.height())
         .into_par_iter()
         .flat_map(|y| (0..camera.width()).into_par_iter().map(move |x| (x, y)))
-        .for_each_with(sender, |sender, (x, y)| {
+        .try_for_each_with(sender, |sender, (x, y)| -> anyhow::Result<()> {
             bar.inc(1);
             let color = color_to_rgb(render_pixel(&camera, &*world, UVec2::new(x, y)));
-            sender.send(Pixel { x, y, color }).unwrap();
-        });
+            sender.send(Pixel { x, y, color })?;
+            Ok(())
+        })?;
     bar.finish();
 
     gfx_thread.join().unwrap()?;
