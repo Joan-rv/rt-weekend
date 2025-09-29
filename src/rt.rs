@@ -1,5 +1,5 @@
 use glam::{UVec2, Vec3};
-use std::sync::Arc;
+use std::{ops::Index, sync::Arc};
 
 pub const INFINITY: f32 = std::f32::MAX;
 
@@ -19,11 +19,119 @@ impl Interval {
         max: INFINITY,
     };
 
+    pub fn new(min: f32, max: f32) -> Self {
+        Self { min, max }
+    }
+
+    pub fn from_intervals(a: Self, b: Self) -> Self {
+        let min = a.min.min(b.min);
+        let max = a.max.max(b.max);
+        Self { min, max }
+    }
+
+    pub fn size(&self) -> f32 {
+        self.max - self.min
+    }
+
     pub fn contains(&self, x: f32) -> bool {
         self.min <= x && x <= self.max
     }
     pub fn surrounds(&self, x: f32) -> bool {
         self.min < x && x < self.max
+    }
+
+    pub fn expand(&self, delta: f32) -> Self {
+        let padding = delta / 2.0;
+        Interval {
+            min: self.min - padding,
+            max: self.max + padding,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct Aabb {
+    pub x: Interval,
+    pub y: Interval,
+    pub z: Interval,
+}
+
+impl Aabb {
+    pub const EMPTY: Self = Self::new(Interval::EMPTY, Interval::EMPTY, Interval::EMPTY);
+
+    pub const fn new(x: Interval, y: Interval, z: Interval) -> Self {
+        Self { x, y, z }
+    }
+
+    pub fn from_points(a: Vec3, b: Vec3) -> Self {
+        let x = if a[0] < b[0] {
+            Interval::new(a[0], b[0])
+        } else {
+            Interval::new(b[0], a[0])
+        };
+        let y = if a[1] < b[1] {
+            Interval::new(a[1], b[1])
+        } else {
+            Interval::new(b[1], a[1])
+        };
+        let z = if a[2] < b[2] {
+            Interval::new(a[2], b[2])
+        } else {
+            Interval::new(b[2], a[2])
+        };
+        Self { x, y, z }
+    }
+
+    pub fn from_aabbs(a: Self, b: Self) -> Self {
+        Self {
+            x: Interval::from_intervals(a.x, b.x),
+            y: Interval::from_intervals(a.y, b.y),
+            z: Interval::from_intervals(a.z, b.z),
+        }
+    }
+
+    pub fn longest_axis(&self) -> usize {
+        if self.x.size() > self.y.size() {
+            if self.x.size() > self.z.size() { 0 } else { 2 }
+        } else if self.y.size() > self.z.size() {
+            1
+        } else {
+            0
+        }
+    }
+
+    pub fn hit(&self, ray: &Ray, mut valid_t: Interval) -> bool {
+        for axis in 0..3 {
+            let interval = [&self.x, &self.y, &self.z][axis];
+            let dir_inv = 1.0 / ray.direction[axis];
+            let t0 = (interval.min - ray.origin[axis]) * dir_inv;
+            let t1 = (interval.max - ray.origin[axis]) * dir_inv;
+            if t0 < t1 {
+                valid_t.min = valid_t.min.max(t0);
+                valid_t.max = valid_t.max.min(t1);
+            } else {
+                valid_t.min = valid_t.min.max(t1);
+                valid_t.max = valid_t.max.min(t0);
+            }
+
+            if valid_t.max <= valid_t.min {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+impl Index<usize> for Aabb {
+    type Output = Interval;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        match index {
+            0 => &self.x,
+            1 => &self.y,
+            2 => &self.z,
+            _ => panic!("{index} is out of range for Aabb"),
+        }
     }
 }
 
@@ -70,6 +178,7 @@ pub struct HitRecord<'material> {
 
 pub trait Hittable: Sync + Send {
     fn hit(&self, ray: &Ray, valid_t: Interval) -> Option<HitRecord<'_>>;
+    fn bounding_box(&self) -> Aabb;
 }
 
 pub trait Material: Sync + Send {
@@ -272,6 +381,13 @@ impl Hittable for Sphere {
             front_face,
         })
     }
+
+    fn bounding_box(&self) -> Aabb {
+        let rvec = Vec3::splat(self.radius);
+        let box0 = Aabb::from_points(self.center.at(0.0) - rvec, self.center.at(0.0) + rvec);
+        let box1 = Aabb::from_points(self.center.at(1.0) - rvec, self.center.at(1.0) + rvec);
+        Aabb::from_aabbs(box0, box1)
+    }
 }
 
 impl Hittable for Vec<Box<dyn Hittable>> {
@@ -285,6 +401,82 @@ impl Hittable for Vec<Box<dyn Hittable>> {
             }
         }
         closest_hit
+    }
+
+    fn bounding_box(&self) -> Aabb {
+        let mut bbox = Aabb::EMPTY;
+        for hittable in self {
+            bbox = Aabb::from_aabbs(bbox, hittable.bounding_box());
+        }
+        bbox
+    }
+}
+
+type BvhLink = Arc<dyn Hittable>;
+pub struct BvhNode {
+    left: BvhLink,
+    right: BvhLink,
+    bbox: Aabb,
+}
+
+impl BvhNode {
+    pub fn create(hittables: &mut [Arc<dyn Hittable>]) -> Self {
+        if hittables.len() == 0 {
+            panic!("must create BvhNode with at least one hittable");
+        }
+
+        let mut bbox = Aabb::EMPTY;
+        for hittable in &mut *hittables {
+            bbox = Aabb::from_aabbs(bbox, hittable.bounding_box());
+        }
+        if hittables.len() == 1 {
+            return BvhNode {
+                left: hittables[0].clone(),
+                right: hittables[0].clone(),
+                bbox,
+            };
+        }
+        if hittables.len() == 2 {
+            return BvhNode {
+                left: hittables[0].clone(),
+                right: hittables[1].clone(),
+                bbox,
+            };
+        }
+
+        let axis = bbox.longest_axis();
+        hittables.sort_unstable_by(|a, b| {
+            a.bounding_box()[axis]
+                .min
+                .total_cmp(&b.bounding_box()[axis].min)
+        });
+        let mid = hittables.len() / 2;
+        let (left, right) = hittables.split_at_mut(mid);
+        let left = Arc::new(BvhNode::create(left));
+        let right = Arc::new(BvhNode::create(right));
+        BvhNode { left, right, bbox }
+    }
+}
+
+impl Hittable for BvhNode {
+    fn hit(&self, ray: &Ray, valid_t: Interval) -> Option<HitRecord<'_>> {
+        if !self.bbox.hit(ray, valid_t) {
+            return None;
+        }
+
+        let left = self.left.hit(ray, valid_t);
+        let max_t = if let Some(ref record) = left {
+            record.t
+        } else {
+            valid_t.max
+        };
+        let right = self.right.hit(ray, Interval::new(valid_t.min, max_t));
+
+        right.or(left)
+    }
+
+    fn bounding_box(&self) -> Aabb {
+        self.bbox
     }
 }
 

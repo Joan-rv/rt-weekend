@@ -4,7 +4,7 @@ use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
 use minifb::{Window, WindowOptions};
 use rayon::prelude::*;
 use rt_weekend::rt::{
-    Camera, CameraDesc, Dielectric, Hittable, Lambertian, Metal, Sphere, render_pixel,
+    BvhNode, Camera, CameraDesc, Dielectric, Hittable, Lambertian, Metal, Sphere, render_pixel,
 };
 use std::sync::mpsc;
 use std::thread;
@@ -109,9 +109,9 @@ fn sample_scene() -> (Camera, Box<dyn Hittable>) {
 */
 
 fn cover_scene() -> (Camera, Box<dyn Hittable>) {
-    let mut world: Vec<Box<dyn Hittable>> = Vec::new();
+    let mut world: Vec<Arc<dyn Hittable>> = Vec::new();
 
-    world.push(Box::new(Sphere::stationary(
+    world.push(Arc::new(Sphere::stationary(
         Vec3::new(0.0, -1000.0, 0.0),
         1000.0,
         Arc::new(Lambertian {
@@ -132,7 +132,7 @@ fn cover_scene() -> (Camera, Box<dyn Hittable>) {
                 if choose_mat < 0.8 {
                     let albedo = rand::random::<Vec3>() * rand::random::<Vec3>();
                     let center2 = center + Vec3::new(0.0, rand::random_range(0.0..0.5), 0.0);
-                    world.push(Box::new(Sphere::moving(
+                    world.push(Arc::new(Sphere::moving(
                         center,
                         center2,
                         0.2,
@@ -141,13 +141,13 @@ fn cover_scene() -> (Camera, Box<dyn Hittable>) {
                 } else if choose_mat < 0.95 {
                     let albedo = rand::random::<Vec3>() * 0.5 + 0.5;
                     let fuzziness = rand::random_range(0.0..0.5);
-                    world.push(Box::new(Sphere::stationary(
+                    world.push(Arc::new(Sphere::stationary(
                         center,
                         0.2,
                         Arc::new(Metal { albedo, fuzziness }),
                     )));
                 } else {
-                    world.push(Box::new(Sphere::stationary(
+                    world.push(Arc::new(Sphere::stationary(
                         center,
                         0.2,
                         Arc::new(Dielectric {
@@ -159,21 +159,21 @@ fn cover_scene() -> (Camera, Box<dyn Hittable>) {
         }
     }
 
-    world.push(Box::new(Sphere::stationary(
+    world.push(Arc::new(Sphere::stationary(
         Vec3::new(0.0, 1.0, 0.0),
         1.0,
         Arc::new(Dielectric {
             refraction_index: 1.5,
         }),
     )));
-    world.push(Box::new(Sphere::stationary(
+    world.push(Arc::new(Sphere::stationary(
         Vec3::new(-4.0, 1.0, 0.0),
         1.0,
         Arc::new(Lambertian {
             albedo: Vec3::new(0.4, 0.2, 0.1),
         }),
     )));
-    world.push(Box::new(Sphere::stationary(
+    world.push(Arc::new(Sphere::stationary(
         Vec3::new(4.0, 1.0, 0.0),
         1.0,
         Arc::new(Metal {
@@ -181,6 +181,8 @@ fn cover_scene() -> (Camera, Box<dyn Hittable>) {
             fuzziness: 0.0,
         }),
     )));
+
+    let world = BvhNode::create(&mut world);
 
     let camera = Camera::new(&CameraDesc {
         aspect_raio: 16.0 / 9.0,
