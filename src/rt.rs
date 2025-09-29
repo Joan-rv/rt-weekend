@@ -51,6 +51,7 @@ pub fn random_unit_disk_vec3() -> Vec3 {
 pub struct Ray {
     pub origin: Vec3,
     pub direction: Vec3,
+    pub time: f32,
 }
 
 impl Ray {
@@ -166,9 +167,11 @@ impl Camera {
         } else {
             self.center
         };
+        let time = rand::random();
         Ray {
             origin,
             direction: px_loc - origin,
+            time,
         }
     }
 }
@@ -203,14 +206,41 @@ pub fn render_pixel(camera: &Camera, world: &dyn Hittable, coords: UVec2) -> Vec
 }
 
 pub struct Sphere {
-    pub center: Vec3,
+    pub center: Ray,
     pub radius: f32,
     pub material: Arc<dyn Material>,
 }
 
+impl Sphere {
+    pub fn stationary(center: Vec3, radius: f32, material: Arc<dyn Material>) -> Self {
+        Self {
+            center: Ray {
+                origin: center,
+                direction: Vec3::ZERO,
+                time: 0.0,
+            },
+            radius,
+            material,
+        }
+    }
+
+    pub fn moving(center1: Vec3, center2: Vec3, radius: f32, material: Arc<dyn Material>) -> Self {
+        Self {
+            center: Ray {
+                origin: center1,
+                direction: center2 - center1,
+                time: 0.0,
+            },
+            radius,
+            material,
+        }
+    }
+}
+
 impl Hittable for Sphere {
     fn hit(&self, ray: &Ray, valid_t: Interval) -> Option<HitRecord<'_>> {
-        let oc = self.center - ray.origin;
+        let center = self.center.at(ray.time);
+        let oc = center - ray.origin;
         let a = ray.direction.length_squared();
         let h = ray.direction.dot(oc);
         let c = oc.length_squared() - self.radius * self.radius;
@@ -229,7 +259,7 @@ impl Hittable for Sphere {
         }
 
         let point = ray.at(root);
-        let mut normal = (point - self.center) / self.radius;
+        let mut normal = (point - center) / self.radius;
         let front_face = ray.direction.dot(normal) < 0.0;
         if !front_face {
             normal = -normal;
@@ -263,7 +293,7 @@ pub struct Lambertian {
 }
 
 impl Material for Lambertian {
-    fn scatter(&self, _ray: &Ray, record: &HitRecord) -> Option<(Vec3, Ray)> {
+    fn scatter(&self, ray: &Ray, record: &HitRecord) -> Option<(Vec3, Ray)> {
         let mut out_dir = random_unit_vec3() + record.normal;
         if out_dir.length_squared() < 1e-4 {
             out_dir = record.normal;
@@ -273,6 +303,7 @@ impl Material for Lambertian {
             Ray {
                 direction: out_dir,
                 origin: record.point,
+                time: ray.time,
             },
         ))
     }
@@ -291,6 +322,7 @@ impl Material for Metal {
                 origin: record.point,
                 direction: ray.direction.reflect(record.normal)
                     + self.fuzziness * random_unit_vec3(),
+                time: ray.time,
             },
         ))
     }
@@ -331,6 +363,7 @@ impl Material for Dielectric {
             Ray {
                 origin: record.point,
                 direction,
+                time: ray.time,
             },
         ))
     }

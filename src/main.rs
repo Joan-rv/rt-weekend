@@ -1,6 +1,6 @@
 use glam::{UVec2, Vec3};
 use image::{Rgb, RgbImage};
-use indicatif::ProgressBar;
+use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
 use minifb::{Window, WindowOptions};
 use rayon::prelude::*;
 use rt_weekend::rt::{
@@ -8,10 +8,7 @@ use rt_weekend::rt::{
 };
 use std::sync::mpsc;
 use std::thread;
-use std::{
-    f32::consts::{FRAC_PI_4, PI},
-    sync::Arc,
-};
+use std::{f32::consts::PI, sync::Arc};
 
 fn color_to_rgb(color: Vec3) -> Rgb<u8> {
     Rgb((256.0
@@ -22,6 +19,7 @@ fn color_to_rgb(color: Vec3) -> Rgb<u8> {
     .to_array())
 }
 
+/*
 fn simple_scene() -> (Camera, Box<dyn Hittable>) {
     let material = Arc::new(Lambertian {
         albedo: Vec3::new(1.0, 0.0, 0.0),
@@ -79,37 +77,126 @@ fn sample_scene() -> (Camera, Box<dyn Hittable>) {
         fuzziness: 1.0,
     });
 
-    let spheres: Vec<_> = vec![
-        Sphere {
+    let spheres: Vec<Box<dyn Hittable>> = vec![
+        Box::new(Sphere {
             center: Vec3::new(0.0, 0.0, -1.0),
             radius: 0.5,
             material: mat_center.clone(),
-        },
-        Sphere {
+        }),
+        Box::new(Sphere {
             center: Vec3::new(0.0, -100.5, -1.0),
             radius: 100.0,
             material: mat_ground.clone(),
-        },
-        Sphere {
+        }),
+        Box::new(Sphere {
             center: Vec3::new(-1.0, 0.0, -1.0),
             radius: 0.5,
             material: mat_left.clone(),
-        },
-        Sphere {
+        }),
+        Box::new(Sphere {
             center: Vec3::new(-1.0, 0.0, -1.0),
             radius: 0.4,
             material: mat_bubble.clone(),
-        },
-        Sphere {
+        }),
+        Box::new(Sphere {
             center: Vec3::new(1.0, 0.0, -1.0),
             radius: 0.5,
             material: mat_right.clone(),
-        },
-    ]
-    .into_iter()
-    .map(|s| Box::new(s) as Box<dyn Hittable>)
-    .collect();
+        }),
+    ];
     (camera, Box::new(spheres))
+}
+*/
+
+fn cover_scene() -> (Camera, Box<dyn Hittable>) {
+    let mut world: Vec<Box<dyn Hittable>> = Vec::new();
+
+    world.push(Box::new(Sphere::stationary(
+        Vec3::new(0.0, -1000.0, 0.0),
+        1000.0,
+        Arc::new(Lambertian {
+            albedo: Vec3::new(0.5, 0.5, 0.5),
+        }),
+    )));
+
+    for a in -11..11 {
+        for b in -11..11 {
+            let choose_mat: f32 = rand::random();
+            let center = Vec3::new(
+                a as f32 + 0.9 * rand::random::<f32>(),
+                0.2,
+                b as f32 + 0.9 * rand::random::<f32>(),
+            );
+
+            if (center - Vec3::new(4.0, 0.2, 0.0)).length() > 0.9 {
+                if choose_mat < 0.8 {
+                    let albedo = rand::random::<Vec3>() * rand::random::<Vec3>();
+                    let center2 = center + Vec3::new(0.0, rand::random_range(0.0..0.5), 0.0);
+                    world.push(Box::new(Sphere::moving(
+                        center,
+                        center2,
+                        0.2,
+                        Arc::new(Lambertian { albedo }),
+                    )));
+                } else if choose_mat < 0.95 {
+                    let albedo = rand::random::<Vec3>() * 0.5 + 0.5;
+                    let fuzziness = rand::random_range(0.0..0.5);
+                    world.push(Box::new(Sphere::stationary(
+                        center,
+                        0.2,
+                        Arc::new(Metal { albedo, fuzziness }),
+                    )));
+                } else {
+                    world.push(Box::new(Sphere::stationary(
+                        center,
+                        0.2,
+                        Arc::new(Dielectric {
+                            refraction_index: 1.5,
+                        }),
+                    )))
+                }
+            }
+        }
+    }
+
+    world.push(Box::new(Sphere::stationary(
+        Vec3::new(0.0, 1.0, 0.0),
+        1.0,
+        Arc::new(Dielectric {
+            refraction_index: 1.5,
+        }),
+    )));
+    world.push(Box::new(Sphere::stationary(
+        Vec3::new(-4.0, 1.0, 0.0),
+        1.0,
+        Arc::new(Lambertian {
+            albedo: Vec3::new(0.4, 0.2, 0.1),
+        }),
+    )));
+    world.push(Box::new(Sphere::stationary(
+        Vec3::new(4.0, 1.0, 0.0),
+        1.0,
+        Arc::new(Metal {
+            albedo: Vec3::new(0.7, 0.6, 0.5),
+            fuzziness: 0.0,
+        }),
+    )));
+
+    let camera = Camera::new(&CameraDesc {
+        aspect_raio: 16.0 / 9.0,
+        image_width: 1200,
+        samples_per_px: 500,
+        max_depth: 50,
+
+        fovy: 20.0 * PI / 180.0,
+        look_from: Vec3::new(13.0, 2.0, 3.0),
+        look_at: Vec3::new(0.0, 0.0, 0.0),
+
+        defocus_angle: 0.6 * PI / 180.0,
+        focus_dist: 10.0,
+    });
+
+    (camera, Box::new(world))
 }
 
 struct Pixel {
@@ -150,7 +237,7 @@ fn gfx_thread(width: u32, height: u32, receiver: mpsc::Receiver<Pixel>) -> anyho
 }
 
 fn main() -> anyhow::Result<()> {
-    let (camera, world) = sample_scene();
+    let (camera, world) = cover_scene();
 
     let (sender, receiver) = mpsc::channel();
 
@@ -159,16 +246,19 @@ fn main() -> anyhow::Result<()> {
     let gfx_thread = thread::spawn(move || gfx_thread(width, height, receiver));
 
     let bar = ProgressBar::new((camera.width() * camera.height()).into());
+    bar.set_style(
+        ProgressStyle::with_template("{wide_bar} {pos}/{len} {elapsed_precise}/{duration_precise}")
+            .unwrap(),
+    );
     (0..camera.height())
         .into_par_iter()
         .flat_map(|y| (0..camera.width()).into_par_iter().map(move |x| (x, y)))
+        .progress_with(bar)
         .try_for_each_with(sender, |sender, (x, y)| -> anyhow::Result<()> {
-            bar.inc(1);
             let color = color_to_rgb(render_pixel(&camera, &*world, UVec2::new(x, y)));
             sender.send(Pixel { x, y, color })?;
             Ok(())
         })?;
-    bar.finish();
 
     gfx_thread.join().unwrap()?;
 
