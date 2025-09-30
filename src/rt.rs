@@ -50,7 +50,7 @@ impl Interval {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Aabb {
     pub x: Interval,
     pub y: Interval,
@@ -157,6 +157,7 @@ pub fn random_unit_disk_vec3() -> Vec3 {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Ray {
     pub origin: Vec3,
     pub direction: Vec3,
@@ -169,6 +170,7 @@ impl Ray {
     }
 }
 
+#[derive(Clone)]
 pub struct HitRecord<'material> {
     pub point: Vec3,
     pub normal: Vec3,
@@ -187,6 +189,7 @@ pub trait Material: Sync + Send {
     fn scatter(&self, ray: &Ray, record: &HitRecord) -> Option<(Vec3, Ray)>;
 }
 
+#[derive(Debug, Clone)]
 pub struct Camera {
     image_width: u32,
     image_height: u32,
@@ -204,6 +207,7 @@ pub struct Camera {
     max_depth: u32,
 }
 
+#[derive(Debug, Clone)]
 pub struct CameraDesc {
     pub image_width: u32,
     pub aspect_raio: f32,
@@ -316,6 +320,7 @@ pub fn render_pixel(camera: &Camera, world: &dyn Hittable, coords: UVec2) -> Vec
     color / (camera.samples_per_px as f32)
 }
 
+#[derive(Clone)]
 pub struct Sphere {
     pub center: Ray,
     pub radius: f32,
@@ -424,6 +429,7 @@ impl Hittable for Vec<Box<dyn Hittable>> {
 }
 
 type BvhLink = Arc<dyn Hittable>;
+#[derive(Clone)]
 pub struct BvhNode {
     left: BvhLink,
     right: BvhLink,
@@ -491,6 +497,7 @@ impl Hittable for BvhNode {
     }
 }
 
+#[derive(Clone)]
 pub struct Lambertian {
     pub texture: Arc<dyn Texture>,
 }
@@ -520,6 +527,7 @@ impl Material for Lambertian {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Metal {
     pub albedo: Vec3,
     pub fuzziness: f32,
@@ -539,6 +547,7 @@ impl Material for Metal {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Dielectric {
     pub refraction_index: f32,
 }
@@ -584,6 +593,7 @@ pub trait Texture: Send + Sync {
     fn value(&self, tex_coords: Vec2, point: Vec3) -> Vec3;
 }
 
+#[derive(Debug, Clone)]
 pub struct ColorTexture {
     pub albedo: Vec3,
 }
@@ -594,6 +604,7 @@ impl Texture for ColorTexture{
     }
 }
 
+#[derive(Clone)]
 pub struct CheckerTexture {
     pub scale: f32,
     pub even: Arc<dyn Texture>,
