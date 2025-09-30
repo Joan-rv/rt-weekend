@@ -1,5 +1,6 @@
-use glam::{UVec2, Vec3};
+use glam::{UVec2, Vec2, Vec3};
 use std::{ops::Index, sync::Arc};
+use std::f32::{self, consts::PI};
 
 pub const INFINITY: f32 = std::f32::MAX;
 
@@ -171,6 +172,7 @@ impl Ray {
 pub struct HitRecord<'material> {
     pub point: Vec3,
     pub normal: Vec3,
+    pub tex_coords: Vec2,
     pub material: &'material dyn Material,
     pub t: f32,
     pub front_face: bool,
@@ -368,14 +370,23 @@ impl Hittable for Sphere {
         }
 
         let point = ray.at(root);
-        let mut normal = (point - center) / self.radius;
-        let front_face = ray.direction.dot(normal) < 0.0;
-        if !front_face {
-            normal = -normal;
-        }
+        let outward_normal = (point - center) / self.radius;
+        let front_face = ray.direction.dot(outward_normal) < 0.0;
+        let normal = if front_face {
+            outward_normal
+        } else {
+            -outward_normal
+        };
+        let theta = f32::acos(-outward_normal.y);
+        let phi = f32::atan2(-outward_normal.z, outward_normal.x);
+        let u = phi / (2.0 * PI);
+        let v = theta / PI;
+        let tex_coords = Vec2::new(u, v);
+
         Some(HitRecord {
             point,
             normal,
+            tex_coords, 
             t: root,
             material: &*self.material,
             front_face,
@@ -481,7 +492,15 @@ impl Hittable for BvhNode {
 }
 
 pub struct Lambertian {
-    pub albedo: Vec3,
+    pub texture: Arc<dyn Texture>,
+}
+
+impl Lambertian {
+    pub fn from_color(albedo: Vec3) -> Self {
+        Self {
+            texture: Arc::new(ColorTexture {albedo})
+        }
+    }
 }
 
 impl Material for Lambertian {
@@ -491,7 +510,7 @@ impl Material for Lambertian {
             out_dir = record.normal;
         }
         Some((
-            self.albedo,
+            self.texture.value(record.tex_coords, record.point),
             Ray {
                 direction: out_dir,
                 origin: record.point,
@@ -558,5 +577,37 @@ impl Material for Dielectric {
                 time: ray.time,
             },
         ))
+    }
+}
+
+pub trait Texture: Send + Sync {
+    fn value(&self, tex_coords: Vec2, point: Vec3) -> Vec3;
+}
+
+pub struct ColorTexture {
+    pub albedo: Vec3,
+}
+
+impl Texture for ColorTexture{
+    fn value(&self, _tex_coords: Vec2, _point: Vec3) -> Vec3 {
+        self.albedo
+    }
+}
+
+pub struct CheckerTexture {
+    pub scale: f32,
+    pub even: Arc<dyn Texture>,
+    pub odd: Arc<dyn Texture>
+}
+
+impl Texture for CheckerTexture {
+    fn value(&self, tex_coords: Vec2, point: Vec3) -> Vec3 {
+        let point_int = (point / self.scale).floor().as_ivec3();
+        let is_even = point_int.element_sum() % 2 == 0;
+        if is_even {
+            self.even.value(tex_coords, point)
+        } else {
+            self.odd.value(tex_coords, point)
+        }
     }
 }

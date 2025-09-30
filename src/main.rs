@@ -4,8 +4,10 @@ use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
 use minifb::{Window, WindowOptions};
 use rayon::prelude::*;
 use rt_weekend::rt::{
-    BvhNode, Camera, CameraDesc, Dielectric, Hittable, Lambertian, Metal, Sphere, render_pixel,
+    render_pixel, BvhNode, Camera, CameraDesc, CheckerTexture, ColorTexture, Dielectric, Hittable,
+    Lambertian, Metal, Sphere,
 };
+use std::env::args;
 use std::sync::mpsc;
 use std::thread;
 use std::{f32::consts::PI, sync::Arc};
@@ -19,104 +21,22 @@ fn color_to_rgb(color: Vec3) -> Rgb<u8> {
     .to_array())
 }
 
-/*
-fn simple_scene() -> (Camera, Box<dyn Hittable>) {
-    let material = Arc::new(Lambertian {
-        albedo: Vec3::new(1.0, 0.0, 0.0),
-    });
-    let world = Sphere {
-        center: Vec3::new(0.0, 0.0, 0.0),
-        radius: 0.1,
-        material,
-    };
-    let camera = Camera::new(&CameraDesc {
-        image_width: 200,
-        aspect_raio: 16.0 / 9.0,
-
-        look_from: Vec3::new(0.0, 0.0, -1.0),
-        look_at: Vec3::new(0.0, 0.0, 0.0),
-
-        defocus_angle: 0.1,
-        focus_dist: 1.0,
-        fovy: FRAC_PI_4,
-
-        max_depth: 32,
-        samples_per_px: 10,
-    });
-
-    (camera, Box::new(world))
-}
-
-fn sample_scene() -> (Camera, Box<dyn Hittable>) {
-    let camera = Camera::new(&CameraDesc {
-        look_from: Vec3::new(-2.0, 2.0, 1.0),
-        look_at: Vec3::new(0.0, 0.0, -1.0),
-        defocus_angle: PI * 10.0 / 180.0,
-        focus_dist: 3.4,
-        image_width: 2000,
-        aspect_raio: 16.0 / 9.0,
-        fovy: PI * 20.0 / 180.0,
-        samples_per_px: 100,
-        max_depth: 50,
-    });
-
-    let mat_ground = Arc::new(Lambertian {
-        albedo: Vec3::new(0.8, 0.8, 0.0),
-    });
-    let mat_center = Arc::new(Lambertian {
-        albedo: Vec3::new(0.1, 0.2, 0.5),
-    });
-    let mat_left = Arc::new(Dielectric {
-        refraction_index: 1.5,
-    });
-    let mat_bubble = Arc::new(Dielectric {
-        refraction_index: 1.0 / 1.5,
-    });
-    let mat_right = Arc::new(Metal {
-        albedo: Vec3::new(0.8, 0.6, 0.2),
-        fuzziness: 1.0,
-    });
-
-    let spheres: Vec<Box<dyn Hittable>> = vec![
-        Box::new(Sphere {
-            center: Vec3::new(0.0, 0.0, -1.0),
-            radius: 0.5,
-            material: mat_center.clone(),
-        }),
-        Box::new(Sphere {
-            center: Vec3::new(0.0, -100.5, -1.0),
-            radius: 100.0,
-            material: mat_ground.clone(),
-        }),
-        Box::new(Sphere {
-            center: Vec3::new(-1.0, 0.0, -1.0),
-            radius: 0.5,
-            material: mat_left.clone(),
-        }),
-        Box::new(Sphere {
-            center: Vec3::new(-1.0, 0.0, -1.0),
-            radius: 0.4,
-            material: mat_bubble.clone(),
-        }),
-        Box::new(Sphere {
-            center: Vec3::new(1.0, 0.0, -1.0),
-            radius: 0.5,
-            material: mat_right.clone(),
-        }),
-    ];
-    (camera, Box::new(spheres))
-}
-*/
-
-fn cover_scene() -> (Camera, Box<dyn Hittable>) {
+fn bouncing_balls_scene() -> (Camera, Box<dyn Hittable>) {
     let mut world: Vec<Arc<dyn Hittable>> = Vec::new();
 
+    let checker = Arc::new(CheckerTexture {
+        scale: 0.32,
+        even: Arc::new(ColorTexture {
+            albedo: Vec3::new(0.2, 0.3, 0.1),
+        }),
+        odd: Arc::new(ColorTexture {
+            albedo: Vec3::new(0.9, 0.9, 0.9),
+        }),
+    });
     world.push(Arc::new(Sphere::stationary(
         Vec3::new(0.0, -1000.0, 0.0),
         1000.0,
-        Arc::new(Lambertian {
-            albedo: Vec3::new(0.5, 0.5, 0.5),
-        }),
+        Arc::new(Lambertian { texture: checker }),
     )));
 
     for a in -11..11 {
@@ -136,7 +56,7 @@ fn cover_scene() -> (Camera, Box<dyn Hittable>) {
                         center,
                         center2,
                         0.2,
-                        Arc::new(Lambertian { albedo }),
+                        Arc::new(Lambertian::from_color(albedo)),
                     )));
                 } else if choose_mat < 0.95 {
                     let albedo = rand::random::<Vec3>() * 0.5 + 0.5;
@@ -169,9 +89,7 @@ fn cover_scene() -> (Camera, Box<dyn Hittable>) {
     world.push(Arc::new(Sphere::stationary(
         Vec3::new(-4.0, 1.0, 0.0),
         1.0,
-        Arc::new(Lambertian {
-            albedo: Vec3::new(0.4, 0.2, 0.1),
-        }),
+        Arc::new(Lambertian::from_color(Vec3::new(0.4, 0.2, 0.1))),
     )));
     world.push(Arc::new(Sphere::stationary(
         Vec3::new(4.0, 1.0, 0.0),
@@ -186,7 +104,7 @@ fn cover_scene() -> (Camera, Box<dyn Hittable>) {
 
     let camera = Camera::new(&CameraDesc {
         aspect_raio: 16.0 / 9.0,
-        image_width: 1200,
+        image_width: 400,
         samples_per_px: 500,
         max_depth: 50,
 
@@ -197,6 +115,50 @@ fn cover_scene() -> (Camera, Box<dyn Hittable>) {
         defocus_angle: 0.6 * PI / 180.0,
         focus_dist: 10.0,
     });
+
+    (camera, Box::new(world))
+}
+
+fn checkered_spheres_scene() -> (Camera, Box<dyn Hittable>) {
+    let mut world: Vec<Arc<dyn Hittable>> = Vec::new();
+
+    let checker = Arc::new(CheckerTexture {
+        scale: 0.32,
+        even: Arc::new(ColorTexture {
+            albedo: Vec3::new(0.2, 0.3, 0.1),
+        }),
+        odd: Arc::new(ColorTexture {
+            albedo: Vec3::new(0.9, 0.9, 0.9),
+        }),
+    });
+    world.push(Arc::new(Sphere::stationary(
+        Vec3::new(0.0, -10.0, 0.0),
+        10.0,
+        Arc::new(Lambertian {
+            texture: checker.clone(),
+        }),
+    )));
+    world.push(Arc::new(Sphere::stationary(
+        Vec3::new(0.0, 10.0, 0.0),
+        10.0,
+        Arc::new(Lambertian { texture: checker }),
+    )));
+
+    let camera = Camera::new(&CameraDesc {
+        aspect_raio: 16.0 / 9.0,
+        image_width: 1200,
+        samples_per_px: 100,
+        max_depth: 50,
+
+        fovy: 20.0 * PI / 180.0,
+        look_from: Vec3::new(13.0, 2.0, 3.0),
+        look_at: Vec3::new(0.0, 0.0, 0.0),
+
+        defocus_angle: 0.0 * PI / 180.0,
+        focus_dist: 10.0,
+    });
+
+    let world = BvhNode::create(&mut world);
 
     (camera, Box::new(world))
 }
@@ -239,7 +201,11 @@ fn gfx_thread(width: u32, height: u32, receiver: mpsc::Receiver<Pixel>) -> anyho
 }
 
 fn main() -> anyhow::Result<()> {
-    let (camera, world) = cover_scene();
+    let scene_type = args().nth(1);
+    let (camera, world) = match scene_type.as_ref().map(|s| s.as_str()) {
+        Some(s) if s.starts_with("bouncing") => bouncing_balls_scene(),
+        _ => checkered_spheres_scene(),
+    };
 
     let (sender, receiver) = mpsc::channel();
 
