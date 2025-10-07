@@ -1,5 +1,5 @@
 use glam::{UVec2, Vec3};
-use image::{Rgb, RgbImage};
+use image::{ImageReader, Rgb, RgbImage};
 use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
 use minifb::{Window, WindowOptions};
 use rayon::prelude::*;
@@ -163,6 +163,37 @@ fn checkered_spheres_scene() -> (Camera, Box<dyn Hittable>) {
     (camera, Box::new(world))
 }
 
+fn earth_scene() -> anyhow::Result<(Camera, Box<dyn Hittable>)> {
+    let earth_texture = Arc::new(
+        ImageReader::open("res/earthmap10k.jpg")?
+            .decode()?
+            .into_rgb32f(),
+    );
+    let earth_surface = Arc::new(Lambertian {
+        texture: earth_texture,
+    });
+    let globe = Box::new(Sphere::stationary(
+        Vec3::new(0.0, 0.0, 0.0),
+        2.0,
+        earth_surface,
+    ));
+
+    let camera = Camera::new(&CameraDesc {
+        aspect_raio: 16.0 / 9.0,
+        image_width: 1920,
+        samples_per_px: 100,
+        max_depth: 50,
+
+        fovy: 20.0 * PI / 180.0,
+        look_from: Vec3::new(0.0, 0.0, 12.0),
+        look_at: Vec3::new(0.0, 0.0, 0.0),
+        defocus_angle: 0.0,
+        focus_dist: 2.0,
+    });
+
+    Ok((camera, globe))
+}
+
 struct Pixel {
     x: u32,
     y: u32,
@@ -204,6 +235,7 @@ fn main() -> anyhow::Result<()> {
     let scene_type = args().nth(1);
     let (camera, world) = match scene_type.as_ref().map(|s| s.as_str()) {
         Some(s) if s.starts_with("bouncing") => bouncing_balls_scene(),
+        Some(s) if s.starts_with("earth") => earth_scene()?,
         _ => checkered_spheres_scene(),
     };
 

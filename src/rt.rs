@@ -1,4 +1,5 @@
 use glam::{UVec2, Vec2, Vec3};
+use image::Rgb32FImage;
 use std::{ops::Index, sync::Arc};
 use std::f32::{self, consts::PI};
 
@@ -383,7 +384,7 @@ impl Hittable for Sphere {
             -outward_normal
         };
         let theta = f32::acos(-outward_normal.y);
-        let phi = f32::atan2(-outward_normal.z, outward_normal.x);
+        let phi = f32::atan2(-outward_normal.z, outward_normal.x) + PI;
         let u = phi / (2.0 * PI);
         let v = theta / PI;
         let tex_coords = Vec2::new(u, v);
@@ -620,5 +621,16 @@ impl Texture for CheckerTexture {
         } else {
             self.odd.value(tex_coords, point)
         }
+    }
+}
+
+impl Texture for Rgb32FImage {
+    fn value(&self, tex_coords: Vec2, _point: Vec3) -> Vec3 {
+        let u = tex_coords.x.clamp(0.0, 1.0);
+        let v = 1.0 - tex_coords.y.clamp(0.0, 1.0);
+        let x = (u * self.width() as f32) as u32;
+        let y = (v * self.height() as f32) as u32;
+        let px: Vec3 = self.get_pixel(x, y).0.into();
+        px.powf(2.0)
     }
 }
