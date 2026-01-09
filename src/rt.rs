@@ -1,7 +1,7 @@
 use glam::{UVec2, Vec2, Vec3};
 use image::Rgb32FImage;
-use std::{ops::Index, sync::Arc};
 use std::f32::{self, consts::PI};
+use std::{ops::Index, sync::Arc};
 
 pub const INFINITY: f32 = std::f32::MAX;
 
@@ -211,7 +211,7 @@ pub struct Camera {
 #[derive(Debug, Clone)]
 pub struct CameraDesc {
     pub image_width: u32,
-    pub aspect_raio: f32,
+    pub aspect_ratio: f32,
 
     pub look_from: Vec3,
     pub look_at: Vec3,
@@ -227,7 +227,7 @@ pub struct CameraDesc {
 
 impl Camera {
     pub fn new(desc: &CameraDesc) -> Self {
-        let image_height = (desc.image_width as f32 / desc.aspect_raio) as u32;
+        let image_height = (desc.image_width as f32 / desc.aspect_ratio) as u32;
         let h = (desc.fovy / 2.0).tan();
 
         let viewport_height = 2.0 * h * desc.focus_dist;
@@ -392,7 +392,7 @@ impl Hittable for Sphere {
         Some(HitRecord {
             point,
             normal,
-            tex_coords, 
+            tex_coords,
             t: root,
             material: &*self.material,
             front_face,
@@ -506,7 +506,7 @@ pub struct Lambertian {
 impl Lambertian {
     pub fn from_color(albedo: Vec3) -> Self {
         Self {
-            texture: Arc::new(ColorTexture {albedo})
+            texture: Arc::new(ColorTexture { albedo }),
         }
     }
 }
@@ -599,7 +599,7 @@ pub struct ColorTexture {
     pub albedo: Vec3,
 }
 
-impl Texture for ColorTexture{
+impl Texture for ColorTexture {
     fn value(&self, _tex_coords: Vec2, _point: Vec3) -> Vec3 {
         self.albedo
     }
@@ -609,7 +609,7 @@ impl Texture for ColorTexture{
 pub struct CheckerTexture {
     pub scale: f32,
     pub even: Arc<dyn Texture>,
-    pub odd: Arc<dyn Texture>
+    pub odd: Arc<dyn Texture>,
 }
 
 impl Texture for CheckerTexture {
