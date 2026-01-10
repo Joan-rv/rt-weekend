@@ -4,8 +4,8 @@ use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
 use minifb::{Window, WindowOptions};
 use rayon::prelude::*;
 use rt_weekend::rt::{
-    render_pixel, BvhNode, Camera, CameraDesc, CheckerTexture, ColorTexture, Dielectric, Hittable,
-    Lambertian, Metal, Sphere,
+    BvhNode, Camera, CameraDesc, CheckerTexture, ColorTexture, Dielectric, Hittable, Lambertian,
+    Metal, Sphere, render_pixel,
 };
 use std::env::args;
 use std::sync::mpsc;
@@ -103,7 +103,7 @@ fn bouncing_balls_scene() -> (Camera, Box<dyn Hittable>) {
     let world = BvhNode::create(&mut world);
 
     let camera = Camera::new(&CameraDesc {
-        aspect_raio: 16.0 / 9.0,
+        aspect_ratio: 16.0 / 9.0,
         image_width: 400,
         samples_per_px: 500,
         max_depth: 50,
@@ -145,7 +145,7 @@ fn checkered_spheres_scene() -> (Camera, Box<dyn Hittable>) {
     )));
 
     let camera = Camera::new(&CameraDesc {
-        aspect_raio: 16.0 / 9.0,
+        aspect_ratio: 16.0 / 9.0,
         image_width: 1200,
         samples_per_px: 100,
         max_depth: 50,
@@ -179,7 +179,7 @@ fn earth_scene() -> anyhow::Result<(Camera, Box<dyn Hittable>)> {
     ));
 
     let camera = Camera::new(&CameraDesc {
-        aspect_raio: 16.0 / 9.0,
+        aspect_ratio: 16.0 / 9.0,
         image_width: 1920,
         samples_per_px: 100,
         max_depth: 50,
