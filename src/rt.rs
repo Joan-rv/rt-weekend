@@ -1,3 +1,4 @@
+use crate::rng::fast_random;
 use glam::{UVec2, Vec2, Vec3};
 use image::Rgb32FImage;
 use std::f32::{self, consts::PI};
@@ -139,7 +140,7 @@ impl Index<usize> for Aabb {
 
 pub fn random_unit_vec3() -> Vec3 {
     loop {
-        let v = 2.0 * rand::random::<Vec3>() - 1.0;
+        let v = 2.0 * fast_random::<Vec3>() - 1.0;
         let len_sq = v.length_squared();
         if len_sq < 1.0
             && let Some(v) = v.try_normalize()
@@ -151,7 +152,7 @@ pub fn random_unit_vec3() -> Vec3 {
 
 pub fn random_unit_disk_vec3() -> Vec3 {
     loop {
-        let v = 2.0 * rand::random::<Vec3>() - 1.0;
+        let v = 2.0 * fast_random::<Vec3>() - 1.0;
         if v.length_squared() < 1.0 {
             return v;
         }
@@ -274,8 +275,8 @@ impl Camera {
     }
 
     fn get_ray(&self, coords: UVec2) -> Ray {
-        let x = coords.x as f32 + rand::random::<f32>() - 0.5;
-        let y = coords.y as f32 + rand::random::<f32>() - 0.5;
+        let x = coords.x as f32 + fast_random::<f32>() - 0.5;
+        let y = coords.y as f32 + fast_random::<f32>() - 0.5;
         let px_loc = self.pixel00 + x * self.pixel_du + y * self.pixel_dv;
         let origin = if self.defocus_angle > 0.0 {
             let offset = random_unit_disk_vec3();
@@ -283,7 +284,7 @@ impl Camera {
         } else {
             self.center
         };
-        let time = rand::random();
+        let time = fast_random();
         Ray {
             origin,
             direction: px_loc - origin,
@@ -573,7 +574,7 @@ impl Material for Dielectric {
         let cos_theta = (-unit_direction).dot(record.normal).min(1.0);
         let sin_theta = (1.0 - cos_theta * cos_theta).sqrt();
         let cannot_refract = refraction_index * sin_theta > 1.0;
-        let direction = if cannot_refract || self.reflectance(cos_theta) > rand::random() {
+        let direction = if cannot_refract || self.reflectance(cos_theta) > fast_random() {
             unit_direction.reflect(record.normal)
         } else {
             unit_direction.refract(record.normal, refraction_index)

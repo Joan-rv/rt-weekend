@@ -3,14 +3,19 @@ use image::{ImageReader, Rgb, RgbImage};
 use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
 use minifb::{Window, WindowOptions};
 use rayon::prelude::*;
-use rt_weekend::rt::{
-    BvhNode, Camera, CameraDesc, CheckerTexture, ColorTexture, Dielectric, Hittable, Lambertian,
-    Metal, Sphere, render_pixel,
+use rt_weekend::{
+    rng::{fast_random, fast_random_range},
+    rt::{
+        BvhNode, Camera, CameraDesc, CheckerTexture, ColorTexture, Dielectric, Hittable,
+        Lambertian, Metal, Sphere, render_pixel,
+    },
 };
-use std::env::args;
-use std::sync::mpsc;
-use std::thread;
-use std::{f32::consts::PI, sync::Arc};
+use std::{
+    env::args,
+    f32::consts::PI,
+    sync::{Arc, mpsc},
+    thread,
+};
 
 fn color_to_rgb(color: Vec3) -> Rgb<u8> {
     Rgb((256.0
@@ -41,17 +46,17 @@ fn bouncing_balls_scene() -> (Camera, Box<dyn Hittable>) {
 
     for a in -11..11 {
         for b in -11..11 {
-            let choose_mat: f32 = rand::random();
+            let choose_mat: f32 = fast_random();
             let center = Vec3::new(
-                a as f32 + 0.9 * rand::random::<f32>(),
+                a as f32 + 0.9 * fast_random::<f32>(),
                 0.2,
-                b as f32 + 0.9 * rand::random::<f32>(),
+                b as f32 + 0.9 * fast_random::<f32>(),
             );
 
             if (center - Vec3::new(4.0, 0.2, 0.0)).length() > 0.9 {
                 if choose_mat < 0.8 {
-                    let albedo = rand::random::<Vec3>() * rand::random::<Vec3>();
-                    let center2 = center + Vec3::new(0.0, rand::random_range(0.0..0.5), 0.0);
+                    let albedo = fast_random::<Vec3>() * fast_random::<Vec3>();
+                    let center2 = center + Vec3::new(0.0, fast_random_range(0.0..0.5), 0.0);
                     world.push(Arc::new(Sphere::moving(
                         center,
                         center2,
@@ -59,8 +64,8 @@ fn bouncing_balls_scene() -> (Camera, Box<dyn Hittable>) {
                         Arc::new(Lambertian::from_color(albedo)),
                     )));
                 } else if choose_mat < 0.95 {
-                    let albedo = rand::random::<Vec3>() * 0.5 + 0.5;
-                    let fuzziness = rand::random_range(0.0..0.5);
+                    let albedo = fast_random::<Vec3>() * 0.5 + 0.5;
+                    let fuzziness = fast_random_range(0.0..0.5);
                     world.push(Arc::new(Sphere::stationary(
                         center,
                         0.2,
