@@ -11,28 +11,34 @@ function draw() {
 async function run() {
   requestAnimationFrame(draw);
 
-  const worker = new Worker("worker.js", { type: "module" });
   let x = 0;
   let y = 0;
-  worker.onmessage = (e) => {
-    if (e.data) {
-      const {
-        coords: { x: x2, y: y2 },
-        rgb: { r, g, b },
-      } = e.data;
-      image.data[4 * (y2 * 100 + x2)] = Math.floor(r * 255);
-      image.data[4 * (y2 * 100 + x2) + 1] = Math.floor(g * 255);
-      image.data[4 * (y2 * 100 + x2) + 2] = Math.floor(b * 255);
-      image.data[4 * (y2 * 100 + x2) + 3] = 0xff;
-      x++;
-      if (x >= canvas.width) {
-        y++;
-        x = 0;
+  let workers = [];
+  for (let i = 0; i < navigator.hardwareConcurrency; ++i) {
+    const worker = new Worker("worker.js", { type: "module" });
+    worker.onmessage = (e) => {
+      if (e.data) {
+        const {
+          coords: { x: x2, y: y2 },
+          rgb: { r, g, b },
+        } = e.data;
+        image.data[4 * (y2 * 100 + x2)] = Math.floor(r * 255);
+        image.data[4 * (y2 * 100 + x2) + 1] = Math.floor(g * 255);
+        image.data[4 * (y2 * 100 + x2) + 2] = Math.floor(b * 255);
+        image.data[4 * (y2 * 100 + x2) + 3] = 0xff;
+        x++;
+        if (x >= canvas.width) {
+          y++;
+          if (y === canvas.width) {
+            done = true;
+          }
+          x = 0;
+        }
       }
-    }
-    if (y < canvas.height) worker.postMessage([x, y]);
-    else done = true;
-  };
+      if (!done) worker.postMessage([x, y]);
+    };
+    workers.push(worker);
+  }
 }
 
 run();
