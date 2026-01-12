@@ -16,11 +16,14 @@ async function run() {
   let y = 0;
   worker.onmessage = (e) => {
     if (e.data) {
-      const { r, g, b } = e.data;
-      image.data[4 * (y * 100 + x)] = Math.floor(r * 255);
-      image.data[4 * (y * 100 + x) + 1] = Math.floor(g * 255);
-      image.data[4 * (y * 100 + x) + 2] = Math.floor(b * 255);
-      image.data[4 * (y * 100 + x) + 3] = 0xff;
+      const {
+        coords: { x: x2, y: y2 },
+        rgb: { r, g, b },
+      } = e.data;
+      image.data[4 * (y2 * 100 + x2)] = Math.floor(r * 255);
+      image.data[4 * (y2 * 100 + x2) + 1] = Math.floor(g * 255);
+      image.data[4 * (y2 * 100 + x2) + 2] = Math.floor(b * 255);
+      image.data[4 * (y2 * 100 + x2) + 3] = 0xff;
       x++;
       if (x >= canvas.width) {
         y++;

@@ -23,7 +23,7 @@ async function run() {
     const pixel = scene.renderPixel(x, y);
     const { r, g, b } = pixel;
     pixel.free();
-    postMessage({ r, g, b });
+    postMessage({ coords: { x, y }, rgb: { r, g, b } });
   };
 
   postMessage(null);
