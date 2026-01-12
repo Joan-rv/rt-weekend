@@ -22,9 +22,9 @@ async function run() {
           coords: { x: x2, y: y2 },
           rgb: { r, g, b },
         } = e.data;
-        image.data[4 * (y2 * 100 + x2)] = Math.floor(r * 255);
-        image.data[4 * (y2 * 100 + x2) + 1] = Math.floor(g * 255);
-        image.data[4 * (y2 * 100 + x2) + 2] = Math.floor(b * 255);
+        image.data[4 * (y2 * 100 + x2)] = r;
+        image.data[4 * (y2 * 100 + x2) + 1] = g;
+        image.data[4 * (y2 * 100 + x2) + 2] = b;
         image.data[4 * (y2 * 100 + x2) + 3] = 0xff;
         x++;
         if (x >= canvas.width) {

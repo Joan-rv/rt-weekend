@@ -1,4 +1,4 @@
-use glam::{UVec2, Vec3};
+use glam::{UVec2, Vec3, vec3};
 use image::{ImageReader, Rgb, RgbImage};
 use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
 use minifb::{Window, WindowOptions};
@@ -11,6 +11,7 @@ use rt_weekend::{
     },
 };
 use std::{
+    convert::Infallible,
     env::args,
     f32::consts::PI,
     sync::{Arc, mpsc},
@@ -32,14 +33,14 @@ fn bouncing_balls_scene() -> (Camera, Box<dyn Hittable>) {
     let checker = Arc::new(CheckerTexture {
         scale: 0.32,
         even: Arc::new(ColorTexture {
-            albedo: Vec3::new(0.2, 0.3, 0.1),
+            albedo: vec3(0.2, 0.3, 0.1),
         }),
         odd: Arc::new(ColorTexture {
-            albedo: Vec3::new(0.9, 0.9, 0.9),
+            albedo: vec3(0.9, 0.9, 0.9),
         }),
     });
     world.push(Arc::new(Sphere::stationary(
-        Vec3::new(0.0, -1000.0, 0.0),
+        vec3(0.0, -1000.0, 0.0),
         1000.0,
         Arc::new(Lambertian { texture: checker }),
     )));
@@ -47,16 +48,16 @@ fn bouncing_balls_scene() -> (Camera, Box<dyn Hittable>) {
     for a in -11..11 {
         for b in -11..11 {
             let choose_mat: f32 = fast_random();
-            let center = Vec3::new(
+            let center = vec3(
                 a as f32 + 0.9 * fast_random::<f32>(),
                 0.2,
                 b as f32 + 0.9 * fast_random::<f32>(),
             );
 
-            if (center - Vec3::new(4.0, 0.2, 0.0)).length() > 0.9 {
+            if (center - vec3(4.0, 0.2, 0.0)).length() > 0.9 {
                 if choose_mat < 0.8 {
                     let albedo = fast_random::<Vec3>() * fast_random::<Vec3>();
-                    let center2 = center + Vec3::new(0.0, fast_random_range(0.0..0.5), 0.0);
+                    let center2 = center + vec3(0.0, fast_random_range(0.0..0.5), 0.0);
                     world.push(Arc::new(Sphere::moving(
                         center,
                         center2,
@@ -85,22 +86,22 @@ fn bouncing_balls_scene() -> (Camera, Box<dyn Hittable>) {
     }
 
     world.push(Arc::new(Sphere::stationary(
-        Vec3::new(0.0, 1.0, 0.0),
+        vec3(0.0, 1.0, 0.0),
         1.0,
         Arc::new(Dielectric {
             refraction_index: 1.5,
         }),
     )));
     world.push(Arc::new(Sphere::stationary(
-        Vec3::new(-4.0, 1.0, 0.0),
+        vec3(-4.0, 1.0, 0.0),
         1.0,
-        Arc::new(Lambertian::from_color(Vec3::new(0.4, 0.2, 0.1))),
+        Arc::new(Lambertian::from_color(vec3(0.4, 0.2, 0.1))),
     )));
     world.push(Arc::new(Sphere::stationary(
-        Vec3::new(4.0, 1.0, 0.0),
+        vec3(4.0, 1.0, 0.0),
         1.0,
         Arc::new(Metal {
-            albedo: Vec3::new(0.7, 0.6, 0.5),
+            albedo: vec3(0.7, 0.6, 0.5),
             fuzziness: 0.0,
         }),
     )));
@@ -114,8 +115,8 @@ fn bouncing_balls_scene() -> (Camera, Box<dyn Hittable>) {
         max_depth: 50,
 
         fovy: 20.0 * PI / 180.0,
-        look_from: Vec3::new(13.0, 2.0, 3.0),
-        look_at: Vec3::new(0.0, 0.0, 0.0),
+        look_from: vec3(13.0, 2.0, 3.0),
+        look_at: vec3(0.0, 0.0, 0.0),
 
         defocus_angle: 0.6 * PI / 180.0,
         focus_dist: 10.0,
@@ -130,21 +131,21 @@ fn checkered_spheres_scene() -> (Camera, Box<dyn Hittable>) {
     let checker = Arc::new(CheckerTexture {
         scale: 0.32,
         even: Arc::new(ColorTexture {
-            albedo: Vec3::new(0.2, 0.3, 0.1),
+            albedo: vec3(0.2, 0.3, 0.1),
         }),
         odd: Arc::new(ColorTexture {
-            albedo: Vec3::new(0.9, 0.9, 0.9),
+            albedo: vec3(0.9, 0.9, 0.9),
         }),
     });
     world.push(Arc::new(Sphere::stationary(
-        Vec3::new(0.0, -10.0, 0.0),
+        vec3(0.0, -10.0, 0.0),
         10.0,
         Arc::new(Lambertian {
             texture: checker.clone(),
         }),
     )));
     world.push(Arc::new(Sphere::stationary(
-        Vec3::new(0.0, 10.0, 0.0),
+        vec3(0.0, 10.0, 0.0),
         10.0,
         Arc::new(Lambertian { texture: checker }),
     )));
@@ -156,8 +157,8 @@ fn checkered_spheres_scene() -> (Camera, Box<dyn Hittable>) {
         max_depth: 50,
 
         fovy: 20.0 * PI / 180.0,
-        look_from: Vec3::new(13.0, 2.0, 3.0),
-        look_at: Vec3::new(0.0, 0.0, 0.0),
+        look_from: vec3(13.0, 2.0, 3.0),
+        look_at: vec3(0.0, 0.0, 0.0),
 
         defocus_angle: 0.0 * PI / 180.0,
         focus_dist: 10.0,
@@ -177,11 +178,7 @@ fn earth_scene() -> anyhow::Result<(Camera, Box<dyn Hittable>)> {
     let earth_surface = Arc::new(Lambertian {
         texture: earth_texture,
     });
-    let globe = Box::new(Sphere::stationary(
-        Vec3::new(0.0, 0.0, 0.0),
-        2.0,
-        earth_surface,
-    ));
+    let globe = Box::new(Sphere::stationary(vec3(0.0, 0.0, 0.0), 2.0, earth_surface));
 
     let camera = Camera::new(&CameraDesc {
         aspect_ratio: 16.0 / 9.0,
@@ -190,13 +187,33 @@ fn earth_scene() -> anyhow::Result<(Camera, Box<dyn Hittable>)> {
         max_depth: 50,
 
         fovy: 20.0 * PI / 180.0,
-        look_from: Vec3::new(0.0, 0.0, 12.0),
-        look_at: Vec3::new(0.0, 0.0, 0.0),
+        look_from: vec3(0.0, 0.0, 12.0),
+        look_at: vec3(0.0, 0.0, 0.0),
         defocus_angle: 0.0,
         focus_dist: 2.0,
     });
 
     Ok((camera, globe))
+}
+
+fn simple_scene() -> Result<(Camera, Box<dyn Hittable>), Infallible> {
+    let camera = Camera::new(&CameraDesc {
+        image_width: 100,
+        aspect_ratio: 1.0,
+        look_from: vec3(13.0, 2.0, 3.0),
+        look_at: vec3(0.0, 0.0, 0.0),
+        defocus_angle: 0.6 * PI / 180.0,
+        focus_dist: 10.0,
+        fovy: 20.0 * PI / 180.0,
+        samples_per_px: 100,
+        max_depth: 10,
+    });
+    let sphere = Arc::new(Sphere::stationary(
+        vec3(0.0, 0.0, 0.0),
+        1.0,
+        Arc::new(Lambertian::from_color(vec3(1.0, 0.5, 0.0))),
+    ));
+    Ok((camera, Box::new(BvhNode::create(&mut [sphere]))))
 }
 
 struct Pixel {
@@ -241,6 +258,7 @@ fn main() -> anyhow::Result<()> {
     let (camera, world) = match scene_type.as_ref().map(|s| s.as_str()) {
         Some(s) if s.starts_with("bouncing") => bouncing_balls_scene(),
         Some(s) if s.starts_with("earth") => earth_scene()?,
+        Some(s) if s.starts_with("simple") => simple_scene()?,
         _ => checkered_spheres_scene(),
     };
 

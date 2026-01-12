@@ -1,19 +1,23 @@
 use crate::rt::{BvhNode, Camera, CameraDesc, Hittable, Lambertian, Sphere, render_pixel};
-use glam::{UVec2, Vec3};
+use glam::{U8Vec3, UVec2, Vec3};
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 #[derive(Debug, Clone, Copy)]
 pub struct Rgb {
-    pub r: f32,
-    pub g: f32,
-    pub b: f32,
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
 }
 
 impl From<Vec3> for Rgb {
     fn from(value: Vec3) -> Self {
-        let Vec3 { x, y, z } = value;
+        let U8Vec3 { x, y, z } = (value
+            .map(|v| if v > 0.0 { v.sqrt() } else { v })
+            .clamp(Vec3::splat(0.0), Vec3::splat(0.999))
+            * 256.0)
+            .as_u8vec3();
         Self { r: x, g: y, b: z }
     }
 }
