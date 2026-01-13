@@ -39,6 +39,43 @@ impl WasmVec3 {
     pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self { x, y, z }
     }
+
+    pub fn add(&self, other: &WasmVec3) -> WasmVec3 {
+        WasmVec3 {
+            x: self.x + other.x,
+            y: self.y + other.y,
+            z: self.z + other.z,
+        }
+    }
+
+    pub fn sub(&self, other: &WasmVec3) -> WasmVec3 {
+        WasmVec3 {
+            x: self.x - other.x,
+            y: self.y - other.y,
+            z: self.z - other.z,
+        }
+    }
+
+    pub fn mul(&self, s: f32) -> WasmVec3 {
+        WasmVec3 {
+            x: self.x * s,
+            y: self.y * s,
+            z: self.z * s,
+        }
+    }
+
+    #[wasm_bindgen(js_name = "mulVec")]
+    pub fn mul_vec(&self, other: &WasmVec3) -> WasmVec3 {
+        WasmVec3 {
+            x: self.x * other.x,
+            y: self.y * other.y,
+            z: self.z * other.z,
+        }
+    }
+
+    pub fn length(&self) -> f32 {
+        (self.x * self.x + self.y * self.y + self.z * self.z).sqrt()
+    }
 }
 
 impl From<Vec3> for WasmVec3 {
