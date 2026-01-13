@@ -4,7 +4,7 @@ async function run() {
   await init();
 
   const cameraDesc = new CameraDesc(
-    100,
+    800,
     1.0,
     new Vec3(13.0, 2.0, 3.0),
     new Vec3(0.0, 0.0, 0.0),
@@ -19,11 +19,17 @@ async function run() {
   const scene = sceneBuilder.build();
 
   onmessage = (e) => {
-    const [x, y] = e.data;
-    const pixel = scene.renderPixel(x, y);
-    const { r, g, b } = pixel;
-    pixel.free();
-    postMessage({ coords: { x, y }, rgb: { r, g, b } });
+    let pixels = [];
+    const [start, end] = e.data;
+    for (let i = start; i < end; ++i) {
+      const x = i % 800;
+      const y = Math.floor(i / 800);
+      const pixel = scene.renderPixel(x, y);
+      const { r, g, b } = pixel;
+      pixel.free();
+      pixels.push({ coords: { x, y }, rgb: { r, g, b } });
+    }
+    postMessage(pixels);
   };
 
   postMessage(null);

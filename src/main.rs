@@ -198,7 +198,7 @@ fn earth_scene() -> anyhow::Result<(Camera, Box<dyn Hittable>)> {
 
 fn simple_scene() -> Result<(Camera, Box<dyn Hittable>), Infallible> {
     let camera = Camera::new(&CameraDesc {
-        image_width: 100,
+        image_width: 800,
         aspect_ratio: 1.0,
         look_from: vec3(13.0, 2.0, 3.0),
         look_at: vec3(0.0, 0.0, 0.0),
