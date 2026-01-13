@@ -1,4 +1,7 @@
-use crate::rt::{BvhNode, Camera, CameraDesc, Hittable, Lambertian, Sphere, render_pixel};
+use crate::rt::{
+    BvhNode, Camera, CameraDesc, CheckerTexture, ColorTexture, Dielectric, Hittable, Lambertian,
+    Material, Metal, Sphere, Texture, render_pixel,
+};
 use glam::{U8Vec3, UVec2, Vec3};
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
@@ -67,37 +70,85 @@ impl Scene {
 }
 
 #[wasm_bindgen]
-pub struct SceneBuilder {
-    hittables: Vec<Arc<dyn Hittable>>,
-    camera: Camera,
-}
+#[derive(Clone)]
+pub struct TextureHandle(Arc<dyn Texture>);
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct MaterialHandle(Arc<dyn Material>);
+
+#[wasm_bindgen]
+#[derive(Clone)]
+pub struct HittableHandle(Arc<dyn Hittable>);
+
+#[wasm_bindgen]
+pub struct SceneBuilder;
 
 #[wasm_bindgen]
 impl SceneBuilder {
-    #[wasm_bindgen(constructor)]
-    pub fn new(desc: &WasmCameraDesc) -> Self {
-        console_error_panic_hook::set_once();
-        Self {
-            hittables: Vec::new(),
-            camera: Camera::new(&desc.clone().into()),
-        }
+    #[wasm_bindgen(js_name = "createTextureSolidColor")]
+    pub fn create_texture_solid_color(color: WasmVec3) -> TextureHandle {
+        TextureHandle(Arc::new(ColorTexture {
+            albedo: color.into(),
+        }))
     }
 
-    #[wasm_bindgen]
-    pub fn build(mut self) -> Scene {
-        Scene {
-            world: Box::new(BvhNode::create(&mut self.hittables)),
-            camera: self.camera,
-        }
+    #[wasm_bindgen(js_name = "createTextureChecker")]
+    pub fn create_texture_checker(
+        scale: f32,
+        even: &TextureHandle,
+        odd: &TextureHandle,
+    ) -> TextureHandle {
+        TextureHandle(Arc::new(CheckerTexture {
+            scale,
+            even: even.0.clone(),
+            odd: odd.0.clone(),
+        }))
     }
 
-    #[wasm_bindgen(js_name = "addSphereStationary")]
-    pub fn add_sphere_stationary(&mut self, center: WasmVec3, radius: f32) {
-        self.hittables.push(Arc::new(Sphere::stationary(
+    #[wasm_bindgen(js_name = "createMaterialLambertian")]
+    pub fn create_material_lambertian(texture: &TextureHandle) -> MaterialHandle {
+        MaterialHandle(Arc::new(Lambertian {
+            texture: texture.0.clone(),
+        }))
+    }
+
+    #[wasm_bindgen(js_name = "createMaterialMetal")]
+    pub fn create_material_metal(albedo: WasmVec3, fuzz: f32) -> MaterialHandle {
+        MaterialHandle(Arc::new(Metal {
+            albedo: albedo.into(),
+            fuzziness: fuzz,
+        }))
+    }
+
+    #[wasm_bindgen(js_name = "createMaterialDielectric")]
+    pub fn create_material_dielectric(refraction_index: f32) -> MaterialHandle {
+        MaterialHandle(Arc::new(Dielectric { refraction_index }))
+    }
+
+    #[wasm_bindgen(js_name = "createSphere")]
+    pub fn create_sphere(
+        center: WasmVec3,
+        radius: f32,
+        material: &MaterialHandle,
+    ) -> HittableHandle {
+        HittableHandle(Arc::new(Sphere::stationary(
             center.into(),
             radius,
-            Arc::new(Lambertian::from_color(Vec3::new(1.0, 0.5, 0.0))),
-        )));
+            material.0.clone(),
+        )))
+    }
+
+    pub fn build(camera_desc: &WasmCameraDesc, hittables: Box<[HittableHandle]>) -> Scene {
+        let mut world_list: Vec<Arc<dyn Hittable>> = Vec::new();
+        for h in hittables.iter() {
+            world_list.push(h.0.clone());
+        }
+
+        Scene {
+            world: Box::new(BvhNode::create(&mut world_list)),
+            camera: Camera::new(&camera_desc.clone().into()),
+        }
     }
 }
 
@@ -161,3 +212,4 @@ impl From<WasmCameraDesc> for CameraDesc {
         }
     }
 }
+

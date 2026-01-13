@@ -3,8 +3,10 @@ import init, { SceneBuilder, CameraDesc, Vec3 } from "./pkg/rt_weekend.js";
 async function run() {
   await init();
 
+  const width = 800;
+
   const cameraDesc = new CameraDesc(
-    800,
+    width,
     1.0,
     new Vec3(13.0, 2.0, 3.0),
     new Vec3(0.0, 0.0, 0.0),
@@ -14,16 +16,23 @@ async function run() {
     100,
     10,
   );
-  const sceneBuilder = new SceneBuilder(cameraDesc);
-  sceneBuilder.addSphereStationary(new Vec3(0.0, 0.0, 0.0), 1.0);
-  const scene = sceneBuilder.build();
+
+  const texture = SceneBuilder.createTextureSolidColor(new Vec3(1.0, 0.5, 0.0));
+  const material = SceneBuilder.createMaterialLambertian(texture);
+  const sphere = SceneBuilder.createSphere(
+    new Vec3(0.0, 0.0, 0.0),
+    1.0,
+    material,
+  );
+
+  const scene = SceneBuilder.build(cameraDesc, [sphere]);
 
   onmessage = (e) => {
     let pixels = [];
     const [start, end] = e.data;
     for (let i = start; i < end; ++i) {
-      const x = i % 800;
-      const y = Math.floor(i / 800);
+      const x = i % width;
+      const y = Math.floor(i / width);
       const pixel = scene.renderPixel(x, y);
       const { r, g, b } = pixel;
       pixel.free();
@@ -36,3 +45,4 @@ async function run() {
 }
 
 run();
+
