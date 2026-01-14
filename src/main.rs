@@ -109,8 +109,8 @@ fn bouncing_balls_scene() -> (Camera, Box<dyn Hittable>) {
     let world = BvhNode::create(&mut world);
 
     let camera = Camera::new(&CameraDesc {
-        aspect_ratio: 16.0 / 9.0,
-        image_width: 400,
+        aspect_ratio: 1.0 / 1.0,
+        image_width: 800,
         samples_per_px: 500,
         max_depth: 50,
 

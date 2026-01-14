@@ -1,15 +1,15 @@
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 let image = ctx.createImageData(canvas.width, canvas.height);
-let done;
+let status = "stopped";
 
 function draw() {
+  if (status === "running") requestAnimationFrame(draw);
   ctx.putImageData(image, 0, 0);
-  if (!done) requestAnimationFrame(draw);
 }
 
-async function run() {
-  done = false;
+function render() {
+  image = ctx.createImageData(canvas.width, canvas.height);
   requestAnimationFrame(draw);
 
   let renderPos = 0;
@@ -28,14 +28,14 @@ async function run() {
           image.data[4 * (y * canvas.width + x) + 3] = 0xff;
         }
       }
-      if (!done) {
+      if (status === "running") {
         worker.postMessage([
           renderPos,
           Math.min(renderPos + batchSize, canvas.width * canvas.height),
         ]);
         renderPos += batchSize;
         if (renderPos >= canvas.width * canvas.height) {
-          done = true;
+          status = "stopped";
         }
       } else {
         worker.terminate();
@@ -44,4 +44,14 @@ async function run() {
   }
 }
 
-run();
+function buttonPress() {
+  const button = document.getElementById("button");
+  if (status === "running") {
+    status = "stopped";
+    button.innerHTML = "Render";
+  } else {
+    status = "running";
+    button.innerHTML = "Stop";
+    render();
+  }
+}
