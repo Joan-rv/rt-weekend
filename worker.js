@@ -27,8 +27,8 @@ async function run() {
 
   seed = 123456789;
 
-  const width = 800;
-  const aspect_ratio = 1.0;
+  const imageWidth = 800;
+  const aspectRatio = 1.0;
 
   const hittables = [];
 
@@ -80,26 +80,25 @@ async function run() {
   const mat3 = SceneBuilder.createMaterialMetal(new Vec3(0.7, 0.6, 0.5), 0.0);
   hittables.push(SceneBuilder.createSphere(new Vec3(4.0, 1.0, 0.0), 1.0, mat3));
 
-  const cameraDesc = new CameraDesc(
-    width,
-    aspect_ratio,
-    new Vec3(13.0, 2.0, 3.0),
-    new Vec3(0.0, 0.0, 0.0),
-    (0.6 * Math.PI) / 180.0,
-    10.0,
-    (20.0 * Math.PI) / 180.0,
-    500,
-    50,
-  );
-
+  const cameraDesc = {
+    imageWidth,
+    aspectRatio,
+    lookFrom: { x: 13.0, y: 2.0, z: 3.0 },
+    lookAt: { x: 0.0, y: 0.0, z: 0.0 },
+    defocusAngle: (0.6 * Math.PI) / 180.0,
+    focusDist: 10.0,
+    fovy: (20.0 * Math.PI) / 180.0,
+    samplesPerPx: 500,
+    maxDepth: 50,
+  };
   const scene = SceneBuilder.build(cameraDesc, hittables);
 
   onmessage = (e) => {
     let pixels = [];
     const [start, end] = e.data;
     for (let i = start; i < end; ++i) {
-      const x = i % width;
-      const y = Math.floor(i / width);
+      const x = i % imageWidth;
+      const y = Math.floor(i / imageWidth);
       const pixel = scene.renderPixel(x, y);
       const { r, g, b } = pixel;
       pixel.free();
@@ -112,4 +111,3 @@ async function run() {
 }
 
 run();
-

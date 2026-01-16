@@ -3,6 +3,7 @@ use crate::rt::{
     Material, Metal, Sphere, Texture, render_pixel,
 };
 use glam::{U8Vec3, UVec2, Vec3};
+use serde::Deserialize;
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 
@@ -26,7 +27,7 @@ impl From<Vec3> for Rgb {
 }
 
 #[wasm_bindgen(js_name = "Vec3")]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Deserialize)]
 pub struct WasmVec3 {
     pub x: f32,
     pub y: f32,
@@ -176,21 +177,23 @@ impl SceneBuilder {
         )))
     }
 
-    pub fn build(camera_desc: &WasmCameraDesc, hittables: Box<[HittableHandle]>) -> Scene {
+    pub fn build(camera_desc: JsValue, hittables: Box<[HittableHandle]>) -> Result<Scene, JsValue> {
+        let camera_desc: WasmCameraDesc = serde_wasm_bindgen::from_value(camera_desc)?;
         let mut world_list: Vec<Arc<dyn Hittable>> = Vec::new();
         for h in hittables.iter() {
             world_list.push(h.0.clone());
         }
 
-        Scene {
+        Ok(Scene {
             world: Box::new(BvhNode::create(&mut world_list)),
-            camera: Camera::new(&camera_desc.clone().into()),
-        }
+            camera: Camera::new(&camera_desc.into()),
+        })
     }
 }
 
 #[wasm_bindgen(js_name = "CameraDesc")]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WasmCameraDesc {
     pub image_width: u32,
     pub aspect_ratio: f32,
@@ -204,34 +207,6 @@ pub struct WasmCameraDesc {
 
     pub samples_per_px: u32,
     pub max_depth: u32,
-}
-
-#[wasm_bindgen(js_class = "CameraDesc")]
-impl WasmCameraDesc {
-    #[wasm_bindgen(constructor)]
-    pub fn new(
-        image_width: u32,
-        aspect_ratio: f32,
-        look_from: WasmVec3,
-        look_at: WasmVec3,
-        defocus_angle: f32,
-        focus_dist: f32,
-        fovy: f32,
-        samples_per_px: u32,
-        max_depth: u32,
-    ) -> Self {
-        Self {
-            image_width,
-            aspect_ratio,
-            look_from,
-            look_at,
-            defocus_angle,
-            focus_dist,
-            fovy,
-            samples_per_px,
-            max_depth,
-        }
-    }
 }
 
 impl From<WasmCameraDesc> for CameraDesc {
@@ -249,4 +224,3 @@ impl From<WasmCameraDesc> for CameraDesc {
         }
     }
 }
-
